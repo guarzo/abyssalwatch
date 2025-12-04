@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(mix phx.new:*)",
+      "Bash(mix deps.get:*)",
+      "Bash(mix compile:*)",
+      "Bash(mix ecto.create:*)",
+      "Bash(pg_isready:*)",
+      "Bash(service postgresql start:*)",
+      "Bash(sudo service postgresql start:*)",
+      "Bash(pg_ctl start:*)",
+      "Bash(mix ash.codegen:*)",
+      "Bash(mix ecto.migrate:*)",
+      "Bash(mix run:*)",
+      "Bash(timeout 10 mix phx.server:*)",
+      "WebFetch(domain:developers.eveonline.com)",
+      "Bash(mkdir:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.everef.net)",
+      "Bash(unzip:*)",
+      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs:*)",
+      "Bash(timeout 8 mix phx.server:*)",
+      "Bash(find:*)",
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:hexdocs.pm)",
+      "Bash(rm:*)",
+      "Bash(mount:*)",
+      "Bash(sudo chown:*)",
+      "Bash(apt-get update:*)",
+      "Bash(apt-get install:*)",
+      "Bash(sudo apt-get update:*)",
+      "Bash(sudo apt-get install:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

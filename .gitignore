@@ -1,0 +1,48 @@
+# Elixir/Phoenix
+/_build/
+/deps/
+/*.lock
+*.ez
+*.beam
+
+# Generated on crash by the VM
+erl_crash.dump
+
+# Phoenix
+/priv/static/assets/
+/priv/static/cache_manifest.json
+
+# If NPM is used for assets
+/assets/node_modules/
+
+# Database
+*.db
+*.db-journal
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.secret.exs
+
+# IDE
+.idea/
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+/cover/
+/doc/
+
+# Dialyzer
+/priv/plts/
+
+# Temporary files
+/tmp/

@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - elixir-deps:/workspace/deps
+      - elixir-build:/workspace/_build
+      - hex-cache:/home/vscode/.hex
+      - mix-cache:/home/vscode/.mix
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/abyssalwatch_dev
+      - DATABASE_TEST_URL=postgres://postgres:postgres@db:5432/abyssalwatch_test
+      - SECRET_KEY_BASE=devcontainer-secret-key-base-that-is-at-least-64-bytes-long-for-development
+      - PHX_HOST=localhost
+      - MIX_ENV=dev
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sleep infinity
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: abyssalwatch_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres-data:
+  elixir-deps:
+  elixir-build:
+  hex-cache:
+  mix-cache:

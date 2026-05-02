@@ -4,7 +4,7 @@
 /*.lock
 *.ez
 *.beam
-
+.worktrees
 # Generated on crash by the VM
 erl_crash.dump
 
@@ -46,3 +46,6 @@ Thumbs.db
 
 # Temporary files
 /tmp/
+
+# Devcontainer local overrides
+.devcontainer/docker-compose.override.yml

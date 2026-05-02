@@ -1,8 +1,12 @@
 {
   "name": "AbyssalWatch - Elixir/Ash Development",
-  "dockerComposeFile": "docker-compose.yml",
+  "dockerComposeFile": ["docker-compose.yml", "docker-compose.override.yml"],
   "service": "app",
   "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+
+  // Create empty docker-compose.override.yml if it doesn't exist (runs on host before build)
+  "initializeCommand": "test -f .devcontainer/docker-compose.override.yml || echo 'services: {}' > .devcontainer/docker-compose.override.yml",
 
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {

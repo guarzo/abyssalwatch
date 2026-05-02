@@ -3,6 +3,59 @@ set -e
 
 echo "==> Running post-start setup..."
 
+# Fix Claude Code and OpenCode host path references.
+# When ~/.claude or ~/.config/opencode is mounted from the host, config files
+# contain absolute paths using the host username (e.g. /home/tng/.claude/...)
+# which don't resolve in the container where the user is "vscode". Create a
+# symlink from the host home directory to the container home so these paths
+# resolve.
+CONTAINER_HOME="$(eval echo ~)"
+
+# Handle Claude Code config
+if [ -d "$CONTAINER_HOME/.claude" ]; then
+    MARKETPLACE_CFG="$CONTAINER_HOME/.claude/plugins/known_marketplaces.json"
+    INSTALLED_CFG="$CONTAINER_HOME/.claude/plugins/installed_plugins.json"
+    HOST_HOMES=$(
+        {
+            [ -f "$MARKETPLACE_CFG" ] && grep -oP '"installLocation":\s*"\K/home/[^/]+' "$MARKETPLACE_CFG"
+            [ -f "$INSTALLED_CFG" ]   && grep -oP '"installPath":\s*"\K/home/[^/]+' "$INSTALLED_CFG"
+        } 2>/dev/null | sort -u
+    )
+    for HOST_HOME in $HOST_HOMES; do
+        if [ -n "$HOST_HOME" ] && [ "$HOST_HOME" != "$CONTAINER_HOME" ] && [ ! -e "$HOST_HOME" ]; then
+            echo "🔗 Creating symlink $HOST_HOME -> $CONTAINER_HOME (Claude Code host path fix)"
+            sudo ln -sfn "$CONTAINER_HOME" "$HOST_HOME"
+        fi
+    done
+fi
+
+# Handle OpenCode config (XDG path ~/.config/opencode)
+if [ -d "$CONTAINER_HOME/.config/opencode" ]; then
+    HOST_HOME=""
+    for item in "$CONTAINER_HOME/.config/opencode"/*; do
+        if [ -L "$item" ] && [ ! -e "$item" ]; then
+            HOST_HOME=$(readlink "$item" | grep -oP '^/home/[^/]+' || true)
+            [ -n "$HOST_HOME" ] && break
+        fi
+    done
+    if [ -z "$HOST_HOME" ]; then
+        OPENCODE_CONFIG="$CONTAINER_HOME/.config/opencode/opencode.json"
+        if [ -f "$OPENCODE_CONFIG" ]; then
+            HOST_HOME=$(grep -oP '"/home/[^"]+' "$OPENCODE_CONFIG" | head -1 | tr -d '"' | grep -oP '/home/[^/]+' || true)
+        fi
+    fi
+    if [ -n "$HOST_HOME" ] && [ "$HOST_HOME" != "$CONTAINER_HOME" ] && [ ! -e "$HOST_HOME" ]; then
+        echo "🔗 Creating symlink $HOST_HOME -> $CONTAINER_HOME (OpenCode host path fix)"
+        sudo ln -sfn "$CONTAINER_HOME" "$HOST_HOME"
+    fi
+fi
+
+# Remove Windows credential helper if present (copied from host .gitconfig)
+if grep -q "credential-manager.exe" "$CONTAINER_HOME/.gitconfig" 2>/dev/null; then
+    echo "🔧 Removing Windows credential helper from git config..."
+    git config --global --unset credential.helper 2>/dev/null || true
+fi
+
 # Wait for PostgreSQL to be ready using a simple TCP check
 echo "==> Waiting for PostgreSQL..."
 timeout=30

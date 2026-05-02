@@ -1,0 +1,18 @@
+# docker-compose.override.yml.example
+#
+# Copy this file to docker-compose.override.yml for local customizations.
+# The override file is .gitignored and will be auto-created (empty) if missing.
+#
+# Uncomment sections below as needed:
+services:
+  app:
+    volumes:
+      # Mount host Git config (for commit signing, user info)
+      - ~/.gitconfig:/home/vscode/.gitconfig:cached,ro
+
+      # Mount host SSH keys (for Git over SSH)
+      - ~/.ssh:/home/vscode/.ssh:cached,ro
+
+    # environment:
+    #   # Add any personal environment overrides here
+    #   MY_CUSTOM_VAR: "value"

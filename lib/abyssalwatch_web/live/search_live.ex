@@ -613,15 +613,25 @@ defmodule AbyssalwatchWeb.SearchLive do
     end
   end
 
-  # Stable per-row DOM id used by phx-click/value-id. Falls back to a
-  # composite key when the source module has no id.
-  defp module_dom_id(%{module: m}) do
-    raw =
-      m[:id] || m[:contract_id] || m[:contract_url] || m[:name] || m.name ||
-        :erlang.phash2(m)
+  # Stable per-row DOM id used by phx-click/value-id. Mutamarket may
+  # return multiple rolls per contract and modules without a unique :id;
+  # we tail every id with a phash of the entry to guarantee uniqueness.
+  defp module_dom_id(%{module: m} = entry) do
+    base =
+      first_present([
+        m[:id],
+        m[:contract_id],
+        m[:contract_url]
+      ]) || "x"
 
-    "row-" <> (raw |> to_string() |> String.replace(~r/[^A-Za-z0-9_-]/, "_"))
+    "row-#{base}-#{:erlang.phash2(entry)}"
+    |> String.replace(~r/[^A-Za-z0-9_-]/, "_")
   end
+
+  defp first_present([]), do: nil
+  defp first_present([nil | rest]), do: first_present(rest)
+  defp first_present(["" | rest]), do: first_present(rest)
+  defp first_present([v | _]), do: v
 
   defp filter_chip_summary(filters, attribute_filters) do
     price = if filters.min_price || filters.max_price, do: 1, else: 0
@@ -1321,6 +1331,20 @@ defmodule AbyssalwatchWeb.SearchLive do
   attr :selected_module, :any, required: true
 
   defp results_table(assigns) do
+    median_price = compute_median_price(assigns.modules)
+    radar_attrs = pick_radar_attributes(assigns.modules)
+    attr_ranges = compute_attr_ranges(assigns.modules, radar_attrs)
+
+    {s_tier, rest} = partition_s_tier(assigns.modules)
+
+    assigns =
+      assigns
+      |> assign(:median_price, median_price)
+      |> assign(:radar_attrs, radar_attrs)
+      |> assign(:attr_ranges, attr_ranges)
+      |> assign(:s_tier_modules, s_tier)
+      |> assign(:rest_modules, rest)
+
     ~H"""
     <div class="panel overflow-hidden">
       <table class="dense">
@@ -1379,63 +1403,147 @@ defmodule AbyssalwatchWeb.SearchLive do
           </tr>
         </thead>
         <tbody>
-          <%= for entry <- @modules do %>
-            <% module = entry.module
-            score = entry.score
-            row_id = module_dom_id(entry)
-            is_top = @top_entry == entry
-            is_selected = @selected_module && module_dom_id(@selected_module) == row_id %>
-            <tr
-              id={row_id}
-              phx-click="select_row"
-              phx-value-id={row_id}
-              class={[
-                "cursor-pointer",
-                is_selected && "is-selected"
-              ]}
-            >
-              <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
-                <%= if is_top do %>
-                  ▸
-                <% else %>
-                <% end %>
-              </td>
-              <td>
-                <div class="font-medium text-ink-1">{module[:name] || module.name}</div>
-                <div class="text-[11px] text-ink-3">
-                  {module[:type_name] || module[:source_type_name] || module.type_name}
-                </div>
-              </td>
-              <td class={["text-right", (score || 0) >= 0.85 && "is-strong"]}>
-                <div class="inline-flex items-center justify-end gap-2">
-                  <span class="tnum text-ink-1">
-                    {format_score(score)}
-                  </span>
-                  <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
-                    <span
-                      class="block h-full bg-accent"
-                      style={"width: #{round((score || 0) * 100)}%"}
-                    />
-                  </span>
-                </div>
-              </td>
-              <td class="text-right tnum">
-                {format_price(module[:price] || module.price)}
-              </td>
-              <td>
-                <div class="text-[11px] text-ink-3 truncate max-w-[280px]">
-                  <%= for {{attr, value}, idx} <- Enum.with_index(Enum.take(module[:attributes] || module.attributes || %{}, 3)) do %>
-                    <span :if={idx > 0} class="text-ink-4 mx-1.5">·</span>
-                    <span>{humanize(attr)}</span>
-                    <span class="text-ink-2 tnum ml-1">{format_attribute_value(value)}</span>
-                  <% end %>
-                </div>
+          <%!-- S-tier section: rows scoring >= 0.85, set apart with a mono label divider. --%>
+          <%= if Enum.any?(@s_tier_modules) do %>
+            <tr class="s-tier-divider" aria-hidden="true">
+              <td colspan="5">
+                <span class="s-tier-divider-label">S-tier · {length(@s_tier_modules)} match{if length(@s_tier_modules) == 1, do: "", else: "es"}</span>
               </td>
             </tr>
+            <%= for entry <- @s_tier_modules do %>
+              <.result_row
+                entry={entry}
+                top_entry={@top_entry}
+                selected_module={@selected_module}
+                median_price={@median_price}
+                radar_attrs={@radar_attrs}
+                attr_ranges={@attr_ranges}
+                s_tier={true}
+              />
+            <% end %>
+            <%= if Enum.any?(@rest_modules) do %>
+              <tr class="s-tier-divider" aria-hidden="true">
+                <td colspan="5">
+                  <span class="s-tier-divider-label" style="--accent-line-color: var(--rule-strong);">Rest · {length(@rest_modules)}</span>
+                </td>
+              </tr>
+            <% end %>
+          <% end %>
+
+          <%= for entry <- @rest_modules do %>
+            <.result_row
+              entry={entry}
+              top_entry={@top_entry}
+              selected_module={@selected_module}
+              median_price={@median_price}
+              radar_attrs={@radar_attrs}
+              attr_ranges={@attr_ranges}
+              s_tier={false}
+            />
           <% end %>
         </tbody>
       </table>
     </div>
+    """
+  end
+
+  attr :entry, :any, required: true
+  attr :top_entry, :any, required: true
+  attr :selected_module, :any, required: true
+  attr :median_price, :any, required: true
+  attr :radar_attrs, :list, required: true
+  attr :attr_ranges, :map, required: true
+  attr :s_tier, :boolean, required: true
+
+  defp result_row(assigns) do
+    module = assigns.entry.module
+    score = assigns.entry.score
+    row_id = module_dom_id(assigns.entry)
+    is_top = assigns.top_entry == assigns.entry
+
+    is_selected =
+      assigns.selected_module && module_dom_id(assigns.selected_module) == row_id
+
+    price = module[:price] || module.price
+    is_deal = price_below?(price, assigns.median_price)
+
+    radar_values =
+      radar_normalize(module, assigns.radar_attrs, assigns.attr_ranges)
+
+    assigns =
+      assigns
+      |> assign(:module, module)
+      |> assign(:score, score)
+      |> assign(:row_id, row_id)
+      |> assign(:is_top, is_top)
+      |> assign(:is_selected, is_selected)
+      |> assign(:price, price)
+      |> assign(:is_deal, is_deal)
+      |> assign(:radar_values, radar_values)
+      |> assign(:radar_polygon, radar_data_points(radar_values))
+
+    ~H"""
+    <tr
+      id={@row_id}
+      phx-click="select_row"
+      phx-value-id={@row_id}
+      class={[
+        "cursor-pointer",
+        @is_selected && "is-selected"
+      ]}
+    >
+      <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
+        <%= if @is_top do %>
+          ▸
+        <% else %>
+        <% end %>
+      </td>
+      <td>
+        <div class="font-medium text-ink-1">{@module[:name] || @module.name}</div>
+        <div class="text-[11px] text-ink-3">
+          {@module[:type_name] || @module[:source_type_name] || @module.type_name}
+        </div>
+      </td>
+      <td class={["text-right", (@score || 0) >= 0.85 && "is-strong"]}>
+        <div class="inline-flex items-center justify-end gap-2">
+          <span class="tnum text-ink-1">
+            {format_score(@score)}
+          </span>
+          <%= if Enum.any?(@radar_values) do %>
+            <svg
+              class={["score-radar", @s_tier && "is-s-tier"]}
+              viewBox="-160 -160 320 320"
+              aria-hidden="true"
+            >
+              <polygon points={radar_grid_points(150)} class="score-radar-grid" />
+              <polygon points={@radar_polygon} class="score-radar-shape" />
+            </svg>
+          <% else %>
+            <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
+              <span
+                class="block h-full bg-accent"
+                style={"width: #{round((@score || 0) * 100)}%"}
+              />
+            </span>
+          <% end %>
+        </div>
+      </td>
+      <td class="text-right tnum">
+        <div class="inline-flex items-center justify-end gap-2">
+          <span :if={@is_deal} class="pill-deal" title="Below median price">Deal</span>
+          {format_price(@price)}
+        </div>
+      </td>
+      <td>
+        <div class="text-[11px] text-ink-3 truncate max-w-[280px]">
+          <%= for {{attr, value}, idx} <- Enum.with_index(Enum.take(@module[:attributes] || @module.attributes || %{}, 3)) do %>
+            <span :if={idx > 0} class="text-ink-4 mx-1.5">·</span>
+            <span>{humanize(attr)}</span>
+            <span class="text-ink-2 tnum ml-1">{format_attribute_value(value)}</span>
+          <% end %>
+        </div>
+      </td>
+    </tr>
     """
   end
 
@@ -1684,4 +1792,144 @@ defmodule AbyssalwatchWeb.SearchLive do
       {Float.round(x, 2), Float.round(y, 2)}
     end)
   end
+
+  # ── Per-row analytics for the results table ────────────────────────
+  # Median, top-N attribute selection, normalization for the score-radar.
+
+  defp compute_median_price([]), do: nil
+
+  defp compute_median_price(modules) do
+    prices =
+      modules
+      |> Enum.map(fn %{module: m} -> m[:price] || m.price end)
+      |> Enum.map(&price_to_float/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort()
+
+    case length(prices) do
+      0 -> nil
+      n when rem(n, 2) == 1 -> Enum.at(prices, div(n, 2))
+      n -> (Enum.at(prices, div(n, 2) - 1) + Enum.at(prices, div(n, 2))) / 2
+    end
+  end
+
+  defp price_to_float(nil), do: nil
+  defp price_to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp price_to_float(n) when is_number(n), do: n * 1.0
+  defp price_to_float(_), do: nil
+
+  defp price_below?(nil, _), do: false
+  defp price_below?(_, nil), do: false
+
+  defp price_below?(price, median) do
+    case price_to_float(price) do
+      nil -> false
+      f -> f < median
+    end
+  end
+
+  # Partition results into "standout" S-tier and the rest. The naive
+  # threshold (score >= 0.85) over-fires when the upstream feed is
+  # uniformly high-scoring (every roll an S-tier removes the signal),
+  # so we cap S-tier at 10% of the result set or 25 rows, whichever is
+  # smaller. Below 8 results, no partition — the divider would be noise.
+  defp partition_s_tier(modules) when length(modules) < 8, do: {[], modules}
+
+  defp partition_s_tier(modules) do
+    n = length(modules)
+    cap = min(25, max(1, div(n, 10)))
+    sorted = Enum.sort_by(modules, fn %{score: s} -> s || 0 end, :desc)
+
+    case Enum.take(sorted, cap) do
+      [] ->
+        {[], modules}
+
+      candidates ->
+        # Only call them S-tier if they actually clear the absolute bar.
+        s_tier = Enum.filter(candidates, fn %{score: s} -> (s || 0) >= 0.85 end)
+
+        if Enum.empty?(s_tier) do
+          {[], modules}
+        else
+          ids = MapSet.new(Enum.map(s_tier, & &1))
+          rest = Enum.reject(modules, &MapSet.member?(ids, &1))
+          # Preserve the user's chosen sort within s_tier.
+          ordered = Enum.filter(modules, &MapSet.member?(ids, &1))
+          {ordered, rest}
+        end
+    end
+  end
+
+  # Pick up to 5 attributes that are most commonly present across the
+  # result set. Used as the radar's axes — keeps the visual stable as
+  # the user changes scoring/filters within a single result set.
+  defp pick_radar_attributes([]), do: []
+
+  defp pick_radar_attributes(modules) do
+    modules
+    |> Enum.flat_map(fn %{module: m} ->
+      attrs = m[:attributes] || m.attributes || %{}
+      Map.keys(attrs)
+    end)
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {_k, count} -> -count end)
+    |> Enum.take(5)
+    |> Enum.map(fn {k, _} -> k end)
+  end
+
+  # For each picked attribute, compute the {min, max} numeric range
+  # across the result set so per-row values can be normalized to 0..1.
+  defp compute_attr_ranges([], _attrs), do: %{}
+
+  defp compute_attr_ranges(modules, attrs) do
+    Enum.reduce(attrs, %{}, fn attr, acc ->
+      values =
+        modules
+        |> Enum.map(fn %{module: m} ->
+          attrs_map = m[:attributes] || m.attributes || %{}
+          numeric_attr_value(Map.get(attrs_map, attr))
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      case values do
+        [] -> Map.put(acc, attr, {0.0, 1.0})
+        [single] -> Map.put(acc, attr, {single, single})
+        list -> Map.put(acc, attr, {Enum.min(list), Enum.max(list)})
+      end
+    end)
+  end
+
+  # Map a per-row {attr -> value} pair onto a 0..1 normalized list of
+  # length len(attrs), in the same order as `attrs`. Constant attributes
+  # (range collapsed to a point) emit 0.5 — neutral — to avoid spikes.
+  defp radar_normalize(_module, [], _ranges), do: []
+
+  defp radar_normalize(module, attrs, ranges) do
+    attrs_map = module[:attributes] || module.attributes || %{}
+
+    Enum.map(attrs, fn attr ->
+      value = numeric_attr_value(Map.get(attrs_map, attr))
+      {min_v, max_v} = Map.get(ranges, attr, {0.0, 1.0})
+
+      cond do
+        is_nil(value) -> 0.0
+        max_v == min_v -> 0.5
+        true -> max(0.0, min(1.0, (value - min_v) / (max_v - min_v)))
+      end
+    end)
+  end
+
+  defp numeric_attr_value(nil), do: nil
+  defp numeric_attr_value(v) when is_number(v), do: v * 1.0
+  defp numeric_attr_value(%{"value" => v}), do: numeric_attr_value(v)
+  defp numeric_attr_value(%{value: v}), do: numeric_attr_value(v)
+
+  defp numeric_attr_value(v) when is_binary(v) do
+    case Float.parse(v) do
+      {f, _} -> f
+      :error -> nil
+    end
+  end
+
+  defp numeric_attr_value(_), do: nil
 end

@@ -924,6 +924,81 @@
     background: var(--surface-overlay);
     z-index: 39;
   }
+
+  /* Per-row score radar — a 24px-square 5-axis radar SVG that sits in
+     the score column. Echoes the hero radar at glyph scale. */
+  .score-radar {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    overflow: visible;
+  }
+  .score-radar-grid {
+    fill: none;
+    stroke: var(--rule-1);
+    stroke-width: 0.5;
+  }
+  .score-radar-shape {
+    fill: var(--accent-soft);
+    stroke: var(--accent);
+    stroke-width: 1;
+  }
+  .score-radar.is-s-tier .score-radar-shape {
+    fill: oklch(0.80 0.14 280 / 0.3);
+    stroke: var(--accent-strong);
+    stroke-width: 1.25;
+  }
+
+  /* S-tier section divider inside table.dense — marks the threshold
+     between standout matches (>= 0.85) and the rest. */
+  table.dense tbody tr.s-tier-divider td {
+    background: transparent !important;
+    height: 28px;
+    padding: 0 16px;
+    border-top: 1px solid var(--rule-1);
+    border-bottom: 1px solid var(--rule-1);
+  }
+  .s-tier-divider-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .s-tier-divider-label::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  /* Deal pill — amber. Beside price when row.price < median. */
+  .pill-deal {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 18px;
+    padding: 0 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1;
+    color: var(--signal);
+    background: var(--signal-soft);
+    border: 1px solid oklch(0.82 0.16 70 / 0.4);
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .pill-deal::before {
+    content: "▾";
+    color: var(--signal);
+    font-size: 9px;
+  }
 }
 
 /* ─── LiveView interaction hooks ───────────────────────────────────── */

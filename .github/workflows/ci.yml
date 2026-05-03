@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: hexpm/elixir:1.19.0-erlang-27.3.4-debian-bookworm-20250630-slim
+      image: hexpm/elixir:1.19.5-erlang-27.3.4.10-debian-trixie-20260421-slim
 
     services:
       db:

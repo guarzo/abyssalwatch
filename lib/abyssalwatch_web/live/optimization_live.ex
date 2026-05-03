@@ -1385,8 +1385,14 @@ defmodule AbyssalwatchWeb.OptimizationLive do
                 {if is_top, do: "●", else: ""}
               </td>
               <td class="text-ink-2 tnum">{solution.rank || idx + 1}</td>
-              <td class="text-right">
-                <span class="tnum text-ink-1">{format_score(solution.total_score)}</span>
+              <td class={["text-right", (solution.total_score || 0) >= 0.85 && "is-strong"]}>
+                <span class={[
+                  "tnum",
+                  ((solution.total_score || 0) >= 0.85 && "text-accent-strong font-medium") ||
+                    "text-ink-1"
+                ]}>
+                  {format_score(solution.total_score)}
+                </span>
               </td>
               <td class="text-right tnum">{format_price_plain(solution.total_price)}</td>
             </tr>

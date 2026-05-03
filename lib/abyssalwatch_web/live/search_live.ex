@@ -1036,12 +1036,12 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp results_header(assigns) do
     ~H"""
-    <header class="flex items-end justify-between gap-6 pb-4 mb-4 border-b border-rule-1">
+    <header class="flex items-end justify-between gap-6 pb-6 mb-6 border-b border-rule-strong">
       <div class="min-w-0">
-        <h1 class="text-[22px] leading-[30px] font-semibold text-ink-1 tracking-tight">
+        <h1 class="text-[28px] leading-[36px] font-semibold text-ink-1 tracking-[-0.012em]">
           {if @selected_type, do: @selected_type.name, else: "Search"}
         </h1>
-        <p class="mt-1 text-[13px] text-ink-3">
+        <p class="mt-1.5 text-[13px] text-ink-3">
           <%= cond do %>
             <% is_nil(@selected_type) -> %>
               Find and score abyssal modules from live Mutamarket listings.
@@ -1211,15 +1211,15 @@ defmodule AbyssalwatchWeb.SearchLive do
       <table class="dense">
         <thead>
           <tr>
-            <th class="w-6" aria-hidden="true"></th>
-            <th>
+            <th class={["w-6", @sort_by == "" && ""]} aria-hidden="true"></th>
+            <th class={[@sort_by == "name" && "is-sorted"]}>
               <button
                 type="button"
                 phx-click="sort"
                 phx-value-by="name"
                 class={[
                   "inline-flex items-center gap-1.5 hover:text-ink-1",
-                  @sort_by == "name" && "text-ink-1"
+                  @sort_by == "name" && "text-accent"
                 ]}
               >
                 Name
@@ -1228,14 +1228,14 @@ defmodule AbyssalwatchWeb.SearchLive do
                 </span>
               </button>
             </th>
-            <th class="text-right">
+            <th class={["text-right", @sort_by == "score" && "is-sorted"]}>
               <button
                 type="button"
                 phx-click="sort"
                 phx-value-by="score"
                 class={[
                   "inline-flex items-center gap-1.5 hover:text-ink-1",
-                  @sort_by == "score" && "text-ink-1"
+                  @sort_by == "score" && "text-accent"
                 ]}
               >
                 Score
@@ -1244,14 +1244,14 @@ defmodule AbyssalwatchWeb.SearchLive do
                 </span>
               </button>
             </th>
-            <th class="text-right">
+            <th class={["text-right", @sort_by == "price" && "is-sorted"]}>
               <button
                 type="button"
                 phx-click="sort"
                 phx-value-by="price"
                 class={[
                   "inline-flex items-center gap-1.5 hover:text-ink-1",
-                  @sort_by == "price" && "text-ink-1"
+                  @sort_by == "price" && "text-accent"
                 ]}
               >
                 Price (ISK)
@@ -1291,9 +1291,14 @@ defmodule AbyssalwatchWeb.SearchLive do
                   {module[:type_name] || module[:source_type_name] || module.type_name}
                 </div>
               </td>
-              <td class="text-right">
+              <td class={["text-right", (score || 0) >= 0.85 && "is-strong"]}>
                 <div class="inline-flex items-center justify-end gap-2">
-                  <span class="tnum text-ink-1">{format_score(score)}</span>
+                  <span class={[
+                    "tnum",
+                    ((score || 0) >= 0.85 && "text-accent-strong font-medium") || "text-ink-1"
+                  ]}>
+                    {format_score(score)}
+                  </span>
                   <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
                     <span
                       class="block h-full bg-accent"

@@ -17,12 +17,14 @@
 /* ─── Design tokens (OKLCH) ─────────────────────────────────────────── */
 
 :root {
-  /* Surface — cool slate, hue 250, near-zero chroma */
-  --surface-0: oklch(0.16 0.005 250);
-  --surface-1: oklch(0.20 0.005 250);
-  --surface-2: oklch(0.24 0.006 250);
-  --surface-3: oklch(0.28 0.007 250);
-  --surface-overlay: oklch(0.10 0.004 250 / 0.6);
+  /* Surface — cool slate, hue 250, near-zero chroma. Tier spread is wide
+     on purpose: panels must visibly sit on the page, not in it. */
+  --surface-0:    oklch(0.13 0.005 250);
+  --surface-1:    oklch(0.18 0.005 250);
+  --surface-1-5:  oklch(0.205 0.006 250);
+  --surface-2:    oklch(0.23 0.006 250);
+  --surface-3:    oklch(0.30 0.008 250);
+  --surface-overlay: oklch(0.08 0.004 250 / 0.65);
 
   /* Ink — warm-leaning whites, hue 80 */
   --ink-1: oklch(0.96 0.005 80);
@@ -31,9 +33,9 @@
   --ink-4: oklch(0.42 0.007 80);
 
   /* Borders — 1px hairlines */
-  --rule-1: oklch(0.32 0.005 250);
-  --rule-2: oklch(0.40 0.006 250);
-  --rule-strong: oklch(0.55 0.008 250);
+  --rule-1:      oklch(0.38 0.006 250);
+  --rule-2:      oklch(0.46 0.007 250);
+  --rule-strong: oklch(0.58 0.009 250);
 
   /* Accent — muted indigo, hue 280 */
   --accent: oklch(0.72 0.13 280);
@@ -74,6 +76,7 @@
 @theme {
   --color-surface-0: var(--surface-0);
   --color-surface-1: var(--surface-1);
+  --color-surface-1-5: var(--surface-1-5);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-surface-overlay: var(--surface-overlay);
@@ -156,6 +159,44 @@
 
   /* Hairline rules */
   hr { border: 0; border-top: 1px solid var(--rule-1); margin: 0; }
+
+  /* Surface noise on the app canvas only. Defeats the dead-flat look of
+     pure dark surfaces without reading as glow or chrome. The exception
+     codified in DESIGN.md — never extend this to surface-1/2/3. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.015;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    background-size: 160px 160px;
+  }
+  /* App content sits above the noise layer. */
+  body > * { position: relative; z-index: 1; }
+
+  /* Type hierarchy — letter-spacing is the third lever. */
+  .text-display { font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.012em; color: var(--ink-1); }
+  .text-h2      { font-size: 22px; line-height: 30px; font-weight: 600; letter-spacing: -0.008em; color: var(--ink-1); }
+  .text-h3      { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: -0.005em; color: var(--ink-1); }
+  .text-body    { font-size: 14px; line-height: 20px; font-weight: 400; color: var(--ink-2); }
+  .text-meta {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .text-micro {
+    font-size: 11px;
+    line-height: 14px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--ink-3);
+  }
 }
 
 /* ─── Component primitives ─────────────────────────────────────────── */
@@ -322,13 +363,18 @@
     font-size: 11px;
     font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     color: var(--ink-3);
     background: var(--surface-2);
     border-bottom: 1px solid var(--rule-1);
     position: sticky;
     top: 0;
     z-index: 1;
+  }
+  table.dense thead th[aria-sort="ascending"],
+  table.dense thead th[aria-sort="descending"],
+  table.dense thead th.is-sorted {
+    color: var(--accent);
   }
   table.dense tbody td {
     height: 40px;
@@ -338,6 +384,10 @@
     vertical-align: middle;
     font-variant-numeric: tabular-nums;
   }
+  /* Zebra: alternating surface-1 / surface-1-5 for dense rows.
+     Hover and selected states still win because they're declared after. */
+  table.dense tbody tr:nth-child(odd) td  { background: var(--surface-1); }
+  table.dense tbody tr:nth-child(even) td { background: var(--surface-1-5); }
   table.dense tbody tr:hover td { background: var(--surface-2); }
   table.dense tbody tr.is-selected td {
     background: var(--surface-3);
@@ -345,8 +395,16 @@
   }
   table.dense tbody tr:last-child td { border-bottom: 0; }
 
-  /* Comfortable rows for less-data lists */
-  table.comfortable tbody td { height: 48px; padding: 12px 16px; }
+  /* TOPSIS / score column emphasis: cells flagged .is-strong render the
+     value in accent-strong. Apply to td.is-strong for ≥ 0.85 scores. */
+  table.dense tbody td.is-strong {
+    color: var(--accent-strong);
+    font-weight: 500;
+  }
+
+  /* Comfortable rows for less-data lists. No zebra. */
+  table.comfortable tbody td { height: 48px; padding: 12px 16px; background: var(--surface-1); }
+  table.comfortable tbody tr:hover td { background: var(--surface-2); }
 
   /* Status pill */
   .pill {
@@ -431,6 +489,27 @@
     animation: glyph-flash 800ms var(--motion-ease) 1;
   }
 
+  /* Strong section break — separates major surfaces of a page
+     (Filters / Results / Detail). Hairlines are for in-section dividers. */
+  .section-break {
+    border: 0;
+    border-top: 1px solid var(--rule-strong);
+    margin: 24px 0;
+  }
+
+  /* Live indicator — a steady accent dot. Use for actively-monitoring
+     watchlists, live data feeds, etc. Switch to .live-dot.is-idle for paused. */
+  .live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: middle;
+    flex-shrink: 0;
+  }
+  .live-dot.is-idle { background: var(--status-idle); }
+
   /* Topbar */
   .topbar {
     display: flex;
@@ -499,7 +578,7 @@
   .topbar-nav-link[aria-current="page"] {
     color: var(--ink-1);
     background: var(--surface-2);
-    box-shadow: inset 0 -1px 0 var(--accent);
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
 
   /* App shell main region */

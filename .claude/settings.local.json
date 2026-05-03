@@ -56,7 +56,10 @@
       "Bash(pkill -f \"beam.smp\\\\|mix phx\")",
       "Bash(kill 164461)",
       "mcp__plugin_playwright_playwright__browser_evaluate",
-      "Bash(npx --yes impeccable --json lib/abyssalwatch_web/live/optimization_live.ex)"
+      "Bash(npx --yes impeccable --json lib/abyssalwatch_web/live/optimization_live.ex)",
+      "Bash(mix deps.unlock --check-unused)",
+      "Bash(mix *)",
+      "Bash(docker *)"
     ],
     "deny": [],
     "ask": []

@@ -421,15 +421,31 @@
     animation: skeleton-pulse 1.6s var(--motion-ease) infinite;
   }
 
+  /* One-shot flash for new notification arrivals */
+  @keyframes glyph-flash {
+    0%   { opacity: 1; }
+    50%  { opacity: 0.45; }
+    100% { opacity: 1; }
+  }
+  .animate-glyph-flash {
+    animation: glyph-flash 800ms var(--motion-ease) 1;
+  }
+
   /* Topbar */
   .topbar {
     display: flex;
     align-items: center;
     height: 48px;
-    padding: 0 24px;
+    padding: 0 16px;
     background: var(--surface-1);
     border-bottom: 1px solid var(--rule-1);
-    gap: 24px;
+    gap: 16px;
+  }
+  @media (min-width: 768px) {
+    .topbar {
+      padding: 0 24px;
+      gap: 24px;
+    }
   }
   .topbar-brand {
     display: inline-flex;
@@ -461,8 +477,13 @@
     gap: 4px;
     margin-left: 8px;
     flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
+  .topbar-nav::-webkit-scrollbar { display: none; }
   .topbar-nav-link {
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     height: 32px;
@@ -484,7 +505,12 @@
   /* App shell main region */
   .app-main {
     min-height: calc(100vh - 48px);
-    padding: 24px;
+    padding: 16px;
+  }
+  @media (min-width: 768px) {
+    .app-main {
+      padding: 24px;
+    }
   }
 }
 

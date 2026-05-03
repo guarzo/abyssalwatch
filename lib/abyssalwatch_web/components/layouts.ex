@@ -34,9 +34,9 @@ defmodule AbyssalwatchWeb.Layouts do
   def app(assigns) do
     ~H"""
     <header class="topbar">
-      <a href="/" class="topbar-brand">
+      <a href="/" class="topbar-brand" aria-label="AbyssalWatch home">
         <span class="topbar-brand-mark" aria-hidden="true" />
-        <span>AbyssalWatch</span>
+        <span class="hidden sm:inline">AbyssalWatch</span>
       </a>
 
       <nav class="topbar-nav" aria-label="Primary">
@@ -97,13 +97,22 @@ defmodule AbyssalwatchWeb.Layouts do
         <.icon name="hero-chevron-down" class="size-3 text-ink-3" />
       </summary>
       <div class="absolute right-0 mt-2 w-56 panel py-1 shadow-[var(--shadow-popover)] z-40">
-        <a href="/dashboard" class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1">
+        <a
+          href="/dashboard"
+          class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1"
+        >
           <.icon name="hero-squares-2x2" class="size-4 text-ink-3" /> Dashboard
         </a>
-        <a href="/watchlists" class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1">
+        <a
+          href="/watchlists"
+          class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1"
+        >
           <.icon name="hero-bell-alert" class="size-4 text-ink-3" /> Watchlists
         </a>
-        <a href="/notifications" class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1">
+        <a
+          href="/notifications"
+          class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1"
+        >
           <.icon name="hero-inbox" class="size-4 text-ink-3" /> Notifications
         </a>
         <div class="my-1 border-t border-rule-1"></div>

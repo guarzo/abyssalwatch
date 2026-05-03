@@ -1,0 +1,5 @@
+[     245ms] [INFO] %c📡 [info] GET /notifications
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[     269ms] [INFO] %c📡 [info] Sent 200 in 39ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[     532ms] [LOG] phx-GKv1mosaXXGslxYH mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 23} @ http://localhost:4000/assets/js/app.js:1863

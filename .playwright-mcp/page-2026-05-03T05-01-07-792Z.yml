@@ -1,0 +1,165 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary
+    - banner [ref=e3]:
+      - heading "ArgumentError at GET /optimize" [level=5] [ref=e4]
+      - code [ref=e5]:
+        - generic [ref=e6]: "invalid accept filter provided to allow_upload. Expected a file extension with a known MIME type. MIME types can be extended in your application configuration as follows: config :mime, :types, %{ \"application/vnd.api+json\" => [\"json-api\"] } Got: \"eft\""
+    - generic [ref=e7]:
+      - textbox [ref=e8]: "# ArgumentError at GET /optimize Exception: ** (ArgumentError) invalid accept filter provided to allow_upload. Expected a file extension with a known MIME type. MIME types can be extended in your application configuration as follows: config :mime, :types, %{ \"application/vnd.api+json\" => [\"json-api\"] } Got: \"eft\" (phoenix_live_view 1.1.28) lib/phoenix_live_view/upload_config.ex:409: Phoenix.LiveView.UploadConfig.accept_option!/1 (phoenix_live_view 1.1.28) lib/phoenix_live_view/upload_config.ex:395: anonymous fn/2 in Phoenix.LiveView.UploadConfig.validate_accept_option/1 (elixir 1.19.5) lib/enum.ex:2520: Enum.\"-reduce/3-lists^foldl/2-0-\"/3 (phoenix_live_view 1.1.28) lib/phoenix_live_view/upload_config.ex:394: Phoenix.LiveView.UploadConfig.validate_accept_option/1 (phoenix_live_view 1.1.28) lib/phoenix_live_view/upload_config.ex:141: Phoenix.LiveView.UploadConfig.build/3 (phoenix_live_view 1.1.28) lib/phoenix_live_view/upload.ex:28: Phoenix.LiveView.Upload.allow_upload/3 (abyssalwatch 0.1.0) lib/abyssalwatch_web/live/optimization_live.ex:47: AbyssalwatchWeb.OptimizationLive.mount/3 (phoenix_live_view 1.1.28) lib/phoenix_live_view/utils.ex:356: anonymous fn/6 in Phoenix.LiveView.Utils.maybe_call_live_view_mount!/5 (telemetry 1.4.1) /workspace/.claude/worktrees/impeccable-search/deps/telemetry/src/telemetry.erl:359: :telemetry.span/3 (phoenix_live_view 1.1.28) lib/phoenix_live_view/static.ex:324: Phoenix.LiveView.Static.call_mount_and_handle_params!/5 (phoenix_live_view 1.1.28) lib/phoenix_live_view/static.ex:155: Phoenix.LiveView.Static.do_render/4 (phoenix_live_view 1.1.28) lib/phoenix_live_view/controller.ex:39: Phoenix.LiveView.Controller.live_render/3 (phoenix 1.8.5) lib/phoenix/router.ex:416: Phoenix.Router.__call__/5 (abyssalwatch 0.1.0) lib/abyssalwatch_web/endpoint.ex:1: AbyssalwatchWeb.Endpoint.plug_builder_call/2 (abyssalwatch 0.1.0) deps/plug/lib/plug/debugger.ex:155: AbyssalwatchWeb.Endpoint.\"call (overridable 3)\"/2 (abyssalwatch 0.1.0) lib/abyssalwatch_web/endpoint.ex:1: AbyssalwatchWeb.Endpoint.call/2 (phoenix 1.8.5) lib/phoenix/endpoint/sync_code_reload_plug.ex:22: Phoenix.Endpoint.SyncCodeReloadPlug.do_call/4 (bandit 1.11.0) lib/bandit/pipeline.ex:126: Bandit.Pipeline.call_plug!/2 (bandit 1.11.0) lib/bandit/pipeline.ex:42: Bandit.Pipeline.run/5 (bandit 1.11.0) lib/bandit/http1/handler.ex:13: Bandit.HTTP1.Handler.handle_data/3 ## Connection details ### Params %{} ### Request info * URI: http://localhost:4000/optimize * Query string: ### Session %{\"_csrf_token\" => \"yfwe_c_2d6ZcWSSfSqOzZJw-\", \"abyssalwatch_session_id\" => \"5xykzergsognpqdws2J-9Q\"}"
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - link "lib/phoenix_live_view/upload_config.ex" [ref=e12] [cursor=pointer]:
+            - /url: ""
+          - generic [ref=e13]:
+            - generic [ref=e14]: "404"
+            - generic [ref=e15]: 405 defp accept_option!(<<"." <> extname::binary>> = ext) do
+            - generic [ref=e16]: 406 if MIME.has_type?(extname) do
+            - generic [ref=e17]: "407 {MIME.type(extname), [ext]}"
+            - generic [ref=e18]: 408 else
+            - generic [ref=e19]: 409 raise ArgumentError, """
+            - generic [ref=e20]: 410 invalid accept filter provided to allow_upload.
+            - generic [ref=e21]: "411"
+            - generic [ref=e22]: 412 Expected a file extension with a known MIME type.
+            - generic [ref=e23]: "413"
+            - generic [ref=e24]: "414 MIME types can be extended in your application configuration as follows:"
+          - generic [ref=e26]:
+            - text: Phoenix.LiveView.UploadConfig.accept_option!/1
+            - generic [ref=e27]: phoenix_live_view
+        - text: · ·
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - generic [ref=e30]:
+            - checkbox "Show only app frames" [ref=e31]
+            - text: Show only app frames
+          - button "Copy markdown" [ref=e32]:
+            - generic [ref=e33]: Copy markdown
+            - img [ref=e34]
+        - list [ref=e37]:
+          - listitem [ref=e38]:
+            - button "phoenix_live_view· lib/phoenix_live_view/upload_config.ex:409 Phoenix.LiveView.UploadConfig.accept_option!/1" [ref=e39] [cursor=pointer]:
+              - generic [ref=e40]:
+                - text: phoenix_live_view·
+                - generic [ref=e41]: lib/phoenix_live_view/upload_config.ex:409
+              - generic [ref=e42]: Phoenix.LiveView.UploadConfig.accept_option!/1
+          - listitem [ref=e43]:
+            - button "phoenix_live_view· lib/phoenix_live_view/upload_config.ex:395 anonymous fn/2 in Phoenix.LiveView.UploadConfig.validate_accept_option/1" [ref=e44] [cursor=pointer]:
+              - generic [ref=e45]:
+                - text: phoenix_live_view·
+                - generic [ref=e46]: lib/phoenix_live_view/upload_config.ex:395
+              - generic [ref=e47]: anonymous fn/2 in Phoenix.LiveView.UploadConfig.validate_accept_option/1
+          - listitem [ref=e48]:
+            - button "elixir· lib/enum.ex:2520 Enum.\"-reduce/3-lists^foldl/2-0-\"/3" [ref=e49] [cursor=pointer]:
+              - generic [ref=e50]:
+                - text: elixir·
+                - generic [ref=e51]: lib/enum.ex:2520
+              - generic [ref=e52]: Enum."-reduce/3-lists^foldl/2-0-"/3
+          - listitem [ref=e53]:
+            - button "phoenix_live_view· lib/phoenix_live_view/upload_config.ex:394 Phoenix.LiveView.UploadConfig.validate_accept_option/1" [ref=e54] [cursor=pointer]:
+              - generic [ref=e55]:
+                - text: phoenix_live_view·
+                - generic [ref=e56]: lib/phoenix_live_view/upload_config.ex:394
+              - generic [ref=e57]: Phoenix.LiveView.UploadConfig.validate_accept_option/1
+          - listitem [ref=e58]:
+            - button "phoenix_live_view· lib/phoenix_live_view/upload_config.ex:141 Phoenix.LiveView.UploadConfig.build/3" [ref=e59] [cursor=pointer]:
+              - generic [ref=e60]:
+                - text: phoenix_live_view·
+                - generic [ref=e61]: lib/phoenix_live_view/upload_config.ex:141
+              - generic [ref=e62]: Phoenix.LiveView.UploadConfig.build/3
+          - listitem [ref=e63]:
+            - button "phoenix_live_view· lib/phoenix_live_view/upload.ex:28 Phoenix.LiveView.Upload.allow_upload/3" [ref=e64] [cursor=pointer]:
+              - generic [ref=e65]:
+                - text: phoenix_live_view·
+                - generic [ref=e66]: lib/phoenix_live_view/upload.ex:28
+              - generic [ref=e67]: Phoenix.LiveView.Upload.allow_upload/3
+          - listitem [ref=e68]:
+            - button "lib/abyssalwatch_web/live/optimization_live.ex:47 AbyssalwatchWeb.OptimizationLive.mount/3" [ref=e69] [cursor=pointer]:
+              - generic [ref=e70]:
+                - text: ·
+                - generic [ref=e71]: lib/abyssalwatch_web/live/optimization_live.ex:47
+              - generic [ref=e72]: AbyssalwatchWeb.OptimizationLive.mount/3
+          - listitem [ref=e73]:
+            - button "phoenix_live_view· lib/phoenix_live_view/utils.ex:356 anonymous fn/6 in Phoenix.LiveView.Utils.maybe_call_live_view_mount!/5" [ref=e74] [cursor=pointer]:
+              - generic [ref=e75]:
+                - text: phoenix_live_view·
+                - generic [ref=e76]: lib/phoenix_live_view/utils.ex:356
+              - generic [ref=e77]: anonymous fn/6 in Phoenix.LiveView.Utils.maybe_call_live_view_mount!/5
+          - listitem [ref=e78]:
+            - button "telemetry· /workspace/.claude/worktrees/impeccable-search/deps/telemetry/src/telemetry.erl:359 :telemetry.span/3" [ref=e79] [cursor=pointer]:
+              - generic [ref=e80]:
+                - text: telemetry·
+                - generic [ref=e81]: /workspace/.claude/worktrees/impeccable-search/deps/telemetry/src/telemetry.erl:359
+              - generic [ref=e82]: :telemetry.span/3
+          - listitem [ref=e83]:
+            - button "phoenix_live_view· lib/phoenix_live_view/static.ex:324 Phoenix.LiveView.Static.call_mount_and_handle_params!/5" [ref=e84] [cursor=pointer]:
+              - generic [ref=e85]:
+                - text: phoenix_live_view·
+                - generic [ref=e86]: lib/phoenix_live_view/static.ex:324
+              - generic [ref=e87]: Phoenix.LiveView.Static.call_mount_and_handle_params!/5
+          - listitem [ref=e88]:
+            - button "phoenix_live_view· lib/phoenix_live_view/static.ex:155 Phoenix.LiveView.Static.do_render/4" [ref=e89] [cursor=pointer]:
+              - generic [ref=e90]:
+                - text: phoenix_live_view·
+                - generic [ref=e91]: lib/phoenix_live_view/static.ex:155
+              - generic [ref=e92]: Phoenix.LiveView.Static.do_render/4
+          - listitem [ref=e93]:
+            - button "phoenix_live_view· lib/phoenix_live_view/controller.ex:39 Phoenix.LiveView.Controller.live_render/3" [ref=e94] [cursor=pointer]:
+              - generic [ref=e95]:
+                - text: phoenix_live_view·
+                - generic [ref=e96]: lib/phoenix_live_view/controller.ex:39
+              - generic [ref=e97]: Phoenix.LiveView.Controller.live_render/3
+          - listitem [ref=e98]:
+            - button "phoenix· lib/phoenix/router.ex:416 Phoenix.Router.__call__/5" [ref=e99] [cursor=pointer]:
+              - generic [ref=e100]:
+                - text: phoenix·
+                - generic [ref=e101]: lib/phoenix/router.ex:416
+              - generic [ref=e102]: Phoenix.Router.__call__/5
+          - listitem [ref=e103]:
+            - button "lib/abyssalwatch_web/endpoint.ex:1 AbyssalwatchWeb.Endpoint.plug_builder_call/2" [ref=e104] [cursor=pointer]:
+              - generic [ref=e105]:
+                - text: ·
+                - generic [ref=e106]: lib/abyssalwatch_web/endpoint.ex:1
+              - generic [ref=e107]: AbyssalwatchWeb.Endpoint.plug_builder_call/2
+          - listitem [ref=e108]:
+            - button "deps/plug/lib/plug/debugger.ex:155 AbyssalwatchWeb.Endpoint.\"call (overridable 3)\"/2" [ref=e109] [cursor=pointer]:
+              - generic [ref=e110]:
+                - text: ·
+                - generic [ref=e111]: deps/plug/lib/plug/debugger.ex:155
+              - generic [ref=e112]: AbyssalwatchWeb.Endpoint."call (overridable 3)"/2
+          - listitem [ref=e113]:
+            - button "lib/abyssalwatch_web/endpoint.ex:1 AbyssalwatchWeb.Endpoint.call/2" [ref=e114] [cursor=pointer]:
+              - generic [ref=e115]:
+                - text: ·
+                - generic [ref=e116]: lib/abyssalwatch_web/endpoint.ex:1
+              - generic [ref=e117]: AbyssalwatchWeb.Endpoint.call/2
+          - listitem [ref=e118]:
+            - button "phoenix· lib/phoenix/endpoint/sync_code_reload_plug.ex:22 Phoenix.Endpoint.SyncCodeReloadPlug.do_call/4" [ref=e119] [cursor=pointer]:
+              - generic [ref=e120]:
+                - text: phoenix·
+                - generic [ref=e121]: lib/phoenix/endpoint/sync_code_reload_plug.ex:22
+              - generic [ref=e122]: Phoenix.Endpoint.SyncCodeReloadPlug.do_call/4
+          - listitem [ref=e123]:
+            - button "bandit· lib/bandit/pipeline.ex:126 Bandit.Pipeline.call_plug!/2" [ref=e124] [cursor=pointer]:
+              - generic [ref=e125]:
+                - text: bandit·
+                - generic [ref=e126]: lib/bandit/pipeline.ex:126
+              - generic [ref=e127]: Bandit.Pipeline.call_plug!/2
+          - listitem [ref=e128]:
+            - button "bandit· lib/bandit/pipeline.ex:42 Bandit.Pipeline.run/5" [ref=e129] [cursor=pointer]:
+              - generic [ref=e130]:
+                - text: bandit·
+                - generic [ref=e131]: lib/bandit/pipeline.ex:42
+              - generic [ref=e132]: Bandit.Pipeline.run/5
+          - listitem [ref=e133]:
+            - button "bandit· lib/bandit/http1/handler.ex:13 Bandit.HTTP1.Handler.handle_data/3" [ref=e134] [cursor=pointer]:
+              - generic [ref=e135]:
+                - text: bandit·
+                - generic [ref=e136]: lib/bandit/http1/handler.ex:13
+              - generic [ref=e137]: Bandit.HTTP1.Handler.handle_data/3
+  - generic [ref=e138]:
+    - group [ref=e139]:
+      - generic "Request info" [ref=e140] [cursor=pointer]
+    - group [ref=e141]:
+      - generic "Headers" [ref=e142] [cursor=pointer]
+    - group [ref=e143]:
+      - generic "Session" [ref=e144] [cursor=pointer]

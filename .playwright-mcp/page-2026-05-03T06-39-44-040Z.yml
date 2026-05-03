@@ -1,0 +1,119 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - link "AbyssalWatch" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: AbyssalWatch
+    - navigation "Primary" [ref=e7]:
+      - link "Search" [ref=e8] [cursor=pointer]:
+        - /url: /search
+      - link "Optimize" [ref=e9] [cursor=pointer]:
+        - /url: /optimize
+      - link "Dashboard" [ref=e10] [cursor=pointer]:
+        - /url: /dashboard
+      - link "Watchlists" [ref=e11] [cursor=pointer]:
+        - /url: /watchlists
+      - link "Notifications" [ref=e12] [cursor=pointer]:
+        - /url: /notifications
+    - link "Sign in" [ref=e14] [cursor=pointer]:
+      - /url: /sign-in
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - complementary [ref=e17]:
+        - heading "Search" [level=2] [ref=e19]
+        - generic [ref=e20]:
+          - generic [ref=e22]:
+            - text: Module type
+            - combobox [ref=e23]:
+              - option "Select a type"
+              - option "Abyssal Assault Damage Control"
+              - option "Abyssal Ballistic Control System"
+              - option "Abyssal Damage Control"
+              - option "Abyssal Entropic Radiation Sink"
+              - option "Abyssal Gas Cloud Harvester"
+              - option "Abyssal Gas Cloud Scoop"
+              - option "Abyssal Gyrostabilizer"
+              - option "Abyssal Heat Sink" [selected]
+              - option "Abyssal Ice Harvester"
+              - option "Abyssal Magnetic Field Stabilizer"
+              - option "Abyssal Ore Processing"
+              - option "Abyssal Siege Module"
+              - option "Abyssal Stasis Webifier"
+              - option "Abyssal Vorton Tuning System"
+              - option "Abyssal Warp Disruptor"
+              - option "Abyssal Warp Scrambler"
+              - option "Afterburner"
+              - option "Ancillary Armor Repairer"
+              - option "Armor Plates"
+              - option "Armor Repairer"
+              - option "Damage Control"
+              - option "Energized Armor Membrane"
+              - option "Microwarpdrive"
+              - option "Shield Booster"
+              - option "Shield Extender"
+              - option "Warp Scrambler"
+          - generic [ref=e24]:
+            - text: Scoring profile
+            - generic [ref=e25]:
+              - generic [ref=e26] [cursor=pointer]:
+                - radio "Default" [checked] [ref=e27]
+                - text: Default
+              - generic [ref=e28] [cursor=pointer]:
+                - radio "Conservative" [ref=e29]
+                - text: Conservative
+              - generic [ref=e30] [cursor=pointer]:
+                - radio "Aggressive" [ref=e31]
+                - text: Aggressive
+            - paragraph [ref=e32]: Balanced weights across price, attributes, and slot fit.
+          - generic [ref=e33]:
+            - text: Price (ISK)
+            - generic [ref=e34]:
+              - spinbutton [ref=e35]
+              - spinbutton [ref=e36]
+            - generic [ref=e37]:
+              - text: Minimum score
+              - spinbutton [ref=e38]
+          - button "Searching" [disabled] [ref=e68]:
+            - generic [ref=e69]: Searching
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - heading "Abyssal Heat Sink" [level=1] [ref=e70]
+          - paragraph [ref=e45]: 0 results
+        - table [ref=e72]:
+          - rowgroup [ref=e73]:
+            - row "Name Score Price Attributes" [ref=e74]:
+              - columnheader [ref=e75]
+              - columnheader "Name" [ref=e76]
+              - columnheader "Score" [ref=e77]
+              - columnheader "Price" [ref=e78]
+              - columnheader "Attributes" [ref=e79]
+          - rowgroup [ref=e80]:
+            - row [ref=e81]:
+              - cell [ref=e82]
+              - cell [ref=e83]
+              - cell [ref=e85]
+              - cell [ref=e87]
+              - cell [ref=e89]
+            - row [ref=e91]:
+              - cell [ref=e92]
+              - cell [ref=e93]
+              - cell [ref=e95]
+              - cell [ref=e97]
+              - cell [ref=e99]
+            - row [ref=e101]:
+              - cell [ref=e102]
+              - cell [ref=e103]
+              - cell [ref=e105]
+              - cell [ref=e107]
+              - cell [ref=e109]
+            - row [ref=e111]:
+              - cell [ref=e112]
+              - cell [ref=e113]
+              - cell [ref=e115]
+              - cell [ref=e117]
+              - cell [ref=e119]
+            - row [ref=e121]:
+              - cell [ref=e122]
+              - cell [ref=e123]
+              - cell [ref=e125]
+              - cell [ref=e127]
+              - cell [ref=e129]

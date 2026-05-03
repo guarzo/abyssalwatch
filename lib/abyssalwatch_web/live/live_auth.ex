@@ -46,7 +46,7 @@ defmodule AbyssalwatchWeb.LiveAuth do
     if socket.assigns.current_user do
       socket =
         socket
-        |> redirect(to: "/dashboard")
+        |> redirect(to: "/watch")
 
       {:halt, socket}
     else

@@ -712,7 +712,7 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp format_score(_), do: "—"
 
   defp watch_url(module_type, filters) do
-    base = [{"action", "new"}, {"type_id", to_string(module_type.eve_type_id)}]
+    base = [{"new", "1"}, {"type_id", to_string(module_type.eve_type_id)}]
 
     optional =
       [
@@ -722,7 +722,7 @@ defmodule AbyssalwatchWeb.SearchLive do
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
       |> Enum.map(fn {k, v} -> {k, to_string(v)} end)
 
-    "/watchlists?" <> URI.encode_query(base ++ optional)
+    "/watch?" <> URI.encode_query(base ++ optional)
   end
 
   defp decimal_to_param(nil), do: nil

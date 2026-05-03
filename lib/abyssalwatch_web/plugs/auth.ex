@@ -59,7 +59,7 @@ defmodule AbyssalwatchWeb.Plugs.Auth do
   def redirect_if_authenticated(conn, _opts) do
     if conn.assigns[:current_user] do
       conn
-      |> redirect(to: "/dashboard")
+      |> redirect(to: "/watch")
       |> halt()
     else
       conn

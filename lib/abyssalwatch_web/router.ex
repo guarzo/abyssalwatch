@@ -42,9 +42,14 @@ defmodule AbyssalwatchWeb.Router do
       session: {__MODULE__, :live_session_data, []} do
       live "/search", SearchLive, :index
       live "/optimize", OptimizationLive, :index
-      live "/dashboard", DashboardLive, :index
-      live "/watchlists", WatchlistLive, :index
-      live "/notifications", NotificationLive, :index
+      live "/watch", WatchLive, :index
+
+      # Legacy routes — redirect to /watch with namespaced params.
+      # Preserves deep links from Discord pings, browser bookmarks, and
+      # in-app navigation generated before the merge.
+      get "/dashboard", LegacyRedirectController, :dashboard
+      get "/watchlists", LegacyRedirectController, :watchlists
+      get "/notifications", LegacyRedirectController, :notifications
 
       # Phase 4: Shareable fitting URLs (public access)
       live "/fit/:dna", FittingLive, :show

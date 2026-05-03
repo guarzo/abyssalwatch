@@ -12,12 +12,15 @@ OKLCH only. Surface hue 250 (cool slate), accent hue 280 (muted indigo), status 
 
 ```css
 :root {
-  /* Surface — cool slate, hue 250, near-zero chroma */
-  --surface-0: oklch(0.16 0.005 250); /* app background */
-  --surface-1: oklch(0.20 0.005 250); /* default panel */
-  --surface-2: oklch(0.24 0.006 250); /* hover row, sticky header */
-  --surface-3: oklch(0.28 0.007 250); /* active row, popover */
-  --surface-overlay: oklch(0.10 0.004 250 / 0.6);
+  /* Surface — cool slate, hue 250, near-zero chroma.
+     Tier spread is wide on purpose: panels must visibly sit on the page,
+     not in it. Don't compress these values back together. */
+  --surface-0:    oklch(0.13 0.005 250); /* app background */
+  --surface-1:    oklch(0.18 0.005 250); /* default panel */
+  --surface-1-5:  oklch(0.205 0.006 250); /* zebra stripe alternate row */
+  --surface-2:    oklch(0.23 0.006 250); /* hover row, sticky header */
+  --surface-3:    oklch(0.30 0.008 250); /* active row, popover */
+  --surface-overlay: oklch(0.08 0.004 250 / 0.65);
 
   /* Ink — warm-leaning whites, hue 80, very low chroma (slight warmth against cool surface) */
   --ink-1: oklch(0.96 0.005 80); /* primary text, headings, numbers */
@@ -25,10 +28,12 @@ OKLCH only. Surface hue 250 (cool slate), accent hue 280 (muted indigo), status 
   --ink-3: oklch(0.58 0.007 80); /* meta, units, helpers */
   --ink-4: oklch(0.42 0.007 80); /* disabled */
 
-  /* Borders — 1px hairlines, never decorative */
-  --rule-1: oklch(0.32 0.005 250);
-  --rule-2: oklch(0.40 0.006 250);
-  --rule-strong: oklch(0.55 0.008 250);
+  /* Borders — 1px hairlines, never decorative.
+     `--rule-1` is the default in-section divider; bump to `--rule-strong`
+     for the band that separates Filters / Results / Detail. */
+  --rule-1:      oklch(0.38 0.006 250);
+  --rule-2:      oklch(0.46 0.007 250);
+  --rule-strong: oklch(0.58 0.009 250);
 
   /* Accent — muted indigo, hue 280 */
   --accent: oklch(0.72 0.13 280);
@@ -59,16 +64,18 @@ OKLCH only. Surface hue 250 (cool slate), accent hue 280 (muted indigo), status 
 - Mono / numerals: **JetBrains Mono** 400 / 500. Used for ISK figures, percentages, attribute values, identifiers, every numeric column.
 - `font-feature-settings: 'tnum'` on numeric columns.
 
-Scale (1.25 ratio):
+Scale (1.25 ratio). **Letter-spacing is the third hierarchy lever** — without it, headings and body collapse into the same visual weight. Don't drop it.
 
-| Step | Size / line-height | Weight | Use |
-|---|---|---|---|
-| display | 28 / 36 | 600 | Page title, one per page |
-| h2 | 22 / 30 | 600 | Section heading |
-| h3 | 17 / 24 | 600 | Group header |
-| body | 14 / 20 | 400 | Default |
-| meta | 12 / 16 | 500 | Labels, units, sublines |
-| micro | 11 / 14 | 500 | Shortcut hints, breadcrumbs |
+| Step | Size / line-height | Weight | Letter-spacing | Use |
+|---|---|---|---|---|
+| display | 28 / 36 | 600 | -0.012em | Page title, one per page |
+| h2 | 22 / 30 | 600 | -0.008em | Section heading |
+| h3 | 17 / 24 | 600 | -0.005em | Group header |
+| body | 14 / 20 | 400 | 0 | Default |
+| meta | 12 / 16 | 500 | +0.06em, **uppercase** | Column headers, section labels, group sublines |
+| micro | 11 / 14 | 500 | +0.04em | Shortcut hints, breadcrumbs |
+
+The uppercase + tracked `meta` step is what makes a column header read as a *label* rather than another row of data. Apply it consistently to table headers and the small labels above grouped fields.
 
 Body line length 65–75ch.
 
@@ -78,9 +85,21 @@ Body line length 65–75ch.
 
 Density tiers:
 
-- Dense rows (module tables, watchlist matches): 40px row, 8px vertical / 16px horizontal padding, tabular numerals.
-- Comfortable rows (fittings, watchlists): 48px row, 12px vertical.
+- Dense rows (module tables, watchlist matches): 40px row, 8px vertical / 16px horizontal padding, tabular numerals, **alternating `--surface-1` / `--surface-1-5` zebra striping**.
+- Comfortable rows (fittings, watchlists): 48px row, 12px vertical, no zebra.
 - Reading layout (settings, instructions): max-width 65ch, line-height 1.55.
+
+### Section breaks
+
+Within a panel: hairline `--rule-1` between rows or grouped fields.
+
+Between *sections* of a page (Filters / Results / Detail; sidebar / content; nav / page): `--rule-strong` 1px band, 16-24px vertical breathing room. The strong rule is what tells the eye "this is a different surface of the application." Don't substitute another hairline.
+
+### Surface noise (allowed exception)
+
+`--surface-0` (the app canvas only) carries a fixed-position 1.5% SVG noise overlay. This fights the dead-flat look of pure dark surfaces without violating the no-decoration rule — the noise reads as instrument-panel texture, not as glow or chrome. Implementation: inline data-URI SVG on `body::before`, `position: fixed`, `inset: 0`, `pointer-events: none`, `opacity: 0.015`, `mix-blend-mode: overlay`.
+
+Never apply noise to surface-1, -2, or -3. Never animate it.
 
 ## Radius
 
@@ -127,6 +146,21 @@ For row focus, prefer an inset rail: `box-shadow: inset 2px 0 0 var(--accent)`. 
 - **Badge / status pill.** Surface-2 background, 1px `--rule-1` border, radius 4px. Status badges include shape glyph + label, never color alone.
 - **Modal.** Surface-1 over surface-overlay scrim. Radius 10px. Modal-shaped shadow only here. Use sparingly — exhaust inline / progressive alternatives first.
 
+## Accent placement
+
+The indigo accent (`--accent`) earns its place by being *rare and steady*. Currently allowed:
+
+- **Focus ring** on every focusable element.
+- **Active row** in tables: `--surface-3` background + 2px `inset 2px 0 0 var(--accent)` rail (left edge, never a colored border).
+- **Active nav item** (top bar or side nav): same inset rail treatment, or a 1px bottom shadow `inset 0 -1px 0 var(--accent)` for top bars.
+- **Active sort column** in tables: header *label* gets `color: var(--accent)`; the cells stay `--ink-1`.
+- **TOPSIS score column**: when score ≥ 0.85, the value renders in `--accent-strong`. Below threshold stays `--ink-1`. Color encodes "this is a strong match," nothing else.
+- **Live indicators**: a 4px round dot in `--accent` for actively-monitoring watchlists; switches to `--status-idle` ○ when paused.
+- **Primary action** button fill (`btn-primary`): `--accent` background, `--accent-ink` text.
+- **Brand mark** in the topbar.
+
+Never used decoratively. Never as a gradient. Never as a glow halo. If you want emphasis somewhere not on this list, ask whether weight or position can do the work first.
+
 ## Iconography
 
 Heroicons outline at 20px default, 16px in row context. No emoji in chrome. Status indicators use Unicode shape glyphs (●◐▸○!) so screen readers and color-blind users get meaning without color.
@@ -147,6 +181,10 @@ Heroicons outline at 20px default, 16px in row context. No emoji in chrome. Stat
 - Em dashes in copy (use commas, colons, semicolons, periods, parentheses)
 - Light mode (single dark theme by design)
 - daisyUI default classes (`btn`, `card`, `menu`, `alert`, `bg-base-*`, etc.)
+
+### One bounded exception
+
+A 1.5%-opacity, fixed-position SVG noise overlay on `--surface-0` only. See "Surface noise" under Spacing & rhythm. This is the *only* texture allowed anywhere in the system; it is not a license to add subtle gradients, glows, or grain to anything else.
 
 ## Copy voice
 

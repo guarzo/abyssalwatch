@@ -248,14 +248,14 @@ defmodule AbyssalwatchWeb.CoreComponents do
   def header(assigns) do
     ~H"""
     <header class={[
-      "flex items-end justify-between gap-6 pb-5 mb-6 border-b border-rule-1",
+      "flex items-end justify-between gap-6 pb-6 mb-6 border-b border-rule-strong",
       @class
     ]}>
       <div class="min-w-0">
-        <h1 class="text-[22px] leading-[30px] font-semibold text-ink-1 tracking-tight">
+        <h1 class="text-[28px] leading-[36px] font-semibold text-ink-1 tracking-[-0.012em]">
           {render_slot(@inner_block)}
         </h1>
-        <p :if={@subtitle != []} class="mt-1 text-[13px] text-ink-3">
+        <p :if={@subtitle != []} class="mt-1.5 text-[13px] text-ink-3">
           {render_slot(@subtitle)}
         </p>
       </div>
@@ -263,6 +263,19 @@ defmodule AbyssalwatchWeb.CoreComponents do
         {render_slot(@actions)}
       </div>
     </header>
+    """
+  end
+
+  @doc """
+  Renders a strong section-break rule. Use between major surfaces of a page
+  (Filters / Results / Detail). For in-section dividers, use `<hr />` or
+  `border-rule-1` directly.
+  """
+  attr :class, :any, default: nil
+
+  def section_break(assigns) do
+    ~H"""
+    <hr class={["section-break", @class]} />
     """
   end
 
@@ -283,6 +296,8 @@ defmodule AbyssalwatchWeb.CoreComponents do
     attr :label, :string
     attr :class, :any
     attr :align, :string
+    attr :sort, :atom, doc: "set to :asc, :desc, or :active to mark this column as sorted"
+    attr :cell_class, :any, doc: "extra class applied to each <td> for this column"
   end
 
   slot :action
@@ -300,9 +315,11 @@ defmodule AbyssalwatchWeb.CoreComponents do
           <tr>
             <th
               :for={col <- @col}
+              aria-sort={col[:sort] && to_string(col[:sort])}
               class={[
                 col[:align] == "right" && "text-right",
-                col[:align] == "center" && "text-center"
+                col[:align] == "center" && "text-center",
+                col[:sort] && "is-sorted"
               ]}
             >
               {col[:label]}
@@ -319,6 +336,7 @@ defmodule AbyssalwatchWeb.CoreComponents do
               phx-click={@row_click && @row_click.(row)}
               class={[
                 col[:class],
+                col[:cell_class],
                 col[:align] == "right" && "text-right",
                 col[:align] == "center" && "text-center"
               ]}

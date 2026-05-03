@@ -14,7 +14,6 @@ services:
       - DATABASE_TEST_URL=postgres://postgres:postgres@db:5432/abyssalwatch_test
       - SECRET_KEY_BASE=devcontainer-secret-key-base-that-is-at-least-64-bytes-long-for-development
       - PHX_HOST=localhost
-      - MIX_ENV=dev
     depends_on:
       db:
         condition: service_healthy

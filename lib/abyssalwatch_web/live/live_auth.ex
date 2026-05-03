@@ -55,18 +55,23 @@ defmodule AbyssalwatchWeb.LiveAuth do
   end
 
   defp assign_current_user(socket, session) do
-    case session["user_token"] do
-      nil ->
-        assign(socket, :current_user, nil)
-
-      token ->
-        case AshAuthentication.subject_to_user(token, User, tenant: nil) do
-          {:ok, user} ->
-            assign(socket, :current_user, user)
-
-          _ ->
-            assign(socket, :current_user, nil)
+    cond do
+      user_id = session["user_id"] ->
+        # EVE SSO: user_id stored directly in session
+        case Ash.get(User, user_id) do
+          {:ok, user} -> assign(socket, :current_user, user)
+          _ -> assign(socket, :current_user, nil)
         end
+
+      token = session["user_token"] ->
+        # Legacy AshAuthentication token path
+        case AshAuthentication.subject_to_user(token, User, tenant: nil) do
+          {:ok, user} -> assign(socket, :current_user, user)
+          _ -> assign(socket, :current_user, nil)
+        end
+
+      true ->
+        assign(socket, :current_user, nil)
     end
   end
 end

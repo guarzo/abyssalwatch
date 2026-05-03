@@ -67,6 +67,7 @@ defmodule Abyssalwatch.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
+      {:dotenvy, "~> 1.1", only: [:dev, :test]},
 
       # Ash Framework
       {:ash, "~> 3.0"},

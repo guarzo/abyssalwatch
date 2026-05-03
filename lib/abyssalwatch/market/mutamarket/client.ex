@@ -146,22 +146,53 @@ defmodule Abyssalwatch.Market.Mutamarket.Client do
   defp parse_module(data) when is_map(data) do
     # Handle nested structure from Mutamarket API
     type_info = data["type"] || %{}
-    contract_info = data["contract"] || %{}
-    issuer_info = contract_info["issuer"] || %{}
+    contract_info = data["contract"]
+    source_type_info = data["source_type"] || %{}
+    public_asset_info = data["public_asset"] || %{}
+
+    # Get price from contract first, then public_asset, then estimated_value
+    price =
+      cond do
+        contract_info && contract_info["price"] ->
+          parse_price(contract_info["price"])
+
+        public_asset_info["price"] && public_asset_info["price"] > 0 ->
+          parse_price(public_asset_info["price"])
+
+        data["estimated_value"] ->
+          parse_price(data["estimated_value"])
+
+        true ->
+          Decimal.new(0)
+      end
+
+    issuer_info =
+      if contract_info do
+        contract_info["issuer"] || %{}
+      else
+        public_asset_info["owner"] || %{}
+      end
 
     %{
       external_id: to_string(data["id"] || ""),
       name: type_info["name"] || data["name"] || "Unknown Module",
       type_id: type_info["id"] || data["type_id"],
       type_name: type_info["name"] || data["type_name"],
-      attributes: parse_attributes(data["mutated_attributes"] || data["attributes"] || data["stats"] || %{}),
-      price: parse_price(contract_info["price"] || data["price"]),
-      contract_id: to_string(contract_info["id"] || data["contract_id"] || ""),
+      attributes:
+        parse_attributes(data["mutated_attributes"] || data["attributes"] || data["stats"] || %{}),
+      price: price,
+      contract_id: to_string((contract_info && contract_info["id"]) || data["contract_id"] || ""),
       seller_name: issuer_info["name"] || data["seller_name"] || data["seller"] || "",
       location: data["location"] || data["station_name"] || "",
-      source_type: data["source_type"],
+      # Base module info
+      source_type_id: source_type_info["id"],
+      source_type_name: source_type_info["name"],
+      source_meta_group: source_type_info["meta_group"],
+      # Mutaplasmid info
       mutaplasmid: data["mutaplasmid"],
-      estimated_value: data["estimated_value"]
+      estimated_value: data["estimated_value"],
+      # Is it on a contract?
+      has_contract: not is_nil(contract_info)
     }
   end
 
@@ -172,15 +203,39 @@ defmodule Abyssalwatch.Market.Mutamarket.Client do
   defp parse_attributes(attrs) when is_list(attrs) do
     Enum.reduce(attrs, %{}, fn attr, acc ->
       case attr do
-        # Mutamarket format: mutated_attributes array
-        %{"name" => name, "display_name" => display_name, "value" => value} ->
-          Map.put(acc, display_name || name, value)
+        # Mutamarket format: mutated_attributes array with base_value
+        %{"display_name" => display_name, "value" => value} = full_attr ->
+          key = display_name || full_attr["name"]
+          unit = get_in(full_attr, ["unit", "display_name"])
 
-        %{"name" => name, "value" => value} ->
-          Map.put(acc, name, value)
+          attr_data = %{
+            "value" => value,
+            "base_value" => full_attr["base_value"],
+            "unit" => unit,
+            "is_derived" => full_attr["is_derived"]
+          }
 
-        %{"attribute_id" => id, "value" => value} ->
-          Map.put(acc, to_string(id), value)
+          Map.put(acc, key, attr_data)
+
+        %{"name" => name, "value" => value} = full_attr ->
+          attr_data = %{
+            "value" => value,
+            "base_value" => full_attr["base_value"],
+            "unit" => get_in(full_attr, ["unit", "display_name"]),
+            "is_derived" => full_attr["is_derived"]
+          }
+
+          Map.put(acc, name, attr_data)
+
+        %{"attribute_id" => id, "value" => value} = full_attr ->
+          attr_data = %{
+            "value" => value,
+            "base_value" => full_attr["base_value"],
+            "unit" => nil,
+            "is_derived" => nil
+          }
+
+          Map.put(acc, to_string(id), attr_data)
 
         _ ->
           acc

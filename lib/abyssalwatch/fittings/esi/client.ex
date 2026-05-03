@@ -202,7 +202,9 @@ defmodule Abyssalwatch.Fittings.ESI.Client do
                    access_token: token_response.access_token,
                    refresh_token: token_response.refresh_token,
                    token_expires_at: expires_at
-                 }, action: :refresh_tokens) do
+                 },
+                 action: :refresh_tokens
+               ) do
             {:ok, updated_user} ->
               {:ok, token_response.access_token, updated_user}
 

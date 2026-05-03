@@ -34,7 +34,8 @@
       "Bash(apt-get install:*)",
       "Bash(sudo apt-get update:*)",
       "Bash(sudo apt-get install:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(mix test:*)"
     ],
     "deny": [],
     "ask": []

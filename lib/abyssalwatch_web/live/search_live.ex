@@ -391,6 +391,16 @@ defmodule AbyssalwatchWeb.SearchLive do
       nil ->
         nil
 
+      # New structure with value/base_value map
+      %{"value" => v} when is_number(v) ->
+        v
+
+      %{"value" => v} when is_binary(v) ->
+        case Float.parse(v) do
+          {f, _} -> f
+          :error -> nil
+        end
+
       v when is_number(v) ->
         v
 
@@ -433,10 +443,27 @@ defmodule AbyssalwatchWeb.SearchLive do
     sorted =
       Enum.sort_by(modules, fn %{module: m, score: score} ->
         case sort_by do
-          "score" -> score
-          "price" -> Decimal.to_float(m[:price] || m.price || Decimal.new(0))
-          "name" -> m[:name] || m.name || ""
-          _ -> score
+          "score" ->
+            score
+
+          "price" ->
+            Decimal.to_float(m[:price] || m.price || Decimal.new(0))
+
+          "name" ->
+            m[:name] || m.name || ""
+
+          "base_module" ->
+            m[:source_type_name] || ""
+
+          # Sort by attribute value
+          attr_name ->
+            attrs = m[:attributes] || m.attributes || %{}
+
+            case Map.get(attrs, attr_name) do
+              %{"value" => value} when is_number(value) -> value
+              value when is_number(value) -> value
+              _ -> 0.0
+            end
         end
       end)
 
@@ -479,9 +506,29 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp build_search_url(type_id, "default"), do: "/search?type_id=#{type_id}"
   defp build_search_url(type_id, preset), do: "/search?type_id=#{type_id}&preset=#{preset}"
 
+  # Get ordered list of attribute names for the current result set
+  defp get_display_attributes(modules) do
+    if Enum.empty?(modules) do
+      []
+    else
+      # Get all unique attribute names from results
+      modules
+      |> Enum.flat_map(fn %{module: m} ->
+        attrs = m[:attributes] || m.attributes || %{}
+        Map.keys(attrs)
+      end)
+      |> Enum.uniq()
+      |> Enum.sort()
+    end
+  end
+
   # Template rendering
   @impl true
   def render(assigns) do
+    # Calculate display attributes from current module results
+    display_attrs = get_display_attributes(assigns.modules)
+    assigns = assign(assigns, :display_attributes, display_attrs)
+
     ~H"""
     <div class="container mx-auto px-4 py-8">
       <h1 class="text-3xl font-bold mb-8">Abyssal Module Search</h1>
@@ -685,71 +732,138 @@ defmodule AbyssalwatchWeb.SearchLive do
             </div>
             
     <!-- Results Table -->
-            <div class="overflow-x-auto">
-              <table class="table table-zebra w-full">
-                <thead>
+            <div class="overflow-x-auto bg-base-100 rounded-lg shadow">
+              <table class="table table-sm w-full">
+                <thead class="bg-base-200">
                   <tr>
-                    <th>
-                      <button phx-click="sort" phx-value-by="name" class="flex items-center gap-1">
-                        Name {sort_indicator("name", @sort_by, @sort_order)}
+                    <th class="sticky left-0 bg-base-200 z-10">
+                      <button
+                        phx-click="sort"
+                        phx-value-by="name"
+                        class="flex items-center gap-1 hover:text-primary"
+                      >
+                        Module {sort_indicator("name", @sort_by, @sort_order)}
                       </button>
                     </th>
                     <th>
-                      <button phx-click="sort" phx-value-by="score" class="flex items-center gap-1">
+                      <button
+                        phx-click="sort"
+                        phx-value-by="base_module"
+                        class="flex items-center gap-1 hover:text-primary"
+                      >
+                        Base {sort_indicator("base_module", @sort_by, @sort_order)}
+                      </button>
+                    </th>
+                    <th class="text-center">
+                      <button
+                        phx-click="sort"
+                        phx-value-by="score"
+                        class="flex items-center gap-1 hover:text-primary"
+                      >
                         Score {sort_indicator("score", @sort_by, @sort_order)}
                       </button>
                     </th>
-                    <th>
-                      <button phx-click="sort" phx-value-by="price" class="flex items-center gap-1">
+                    <th class="text-right">
+                      <button
+                        phx-click="sort"
+                        phx-value-by="price"
+                        class="flex items-center gap-1 hover:text-primary justify-end"
+                      >
                         Price {sort_indicator("price", @sort_by, @sort_order)}
                       </button>
                     </th>
-                    <th>Attributes</th>
+                    <!-- Dynamic attribute columns -->
+                    <%= for attr_name <- @display_attributes do %>
+                      <th class="text-right">
+                        <button
+                          phx-click="sort"
+                          phx-value-by={attr_name}
+                          class="flex items-center gap-1 hover:text-primary justify-end text-xs"
+                        >
+                          {truncate_attr_name(attr_name)} {sort_indicator(
+                            attr_name,
+                            @sort_by,
+                            @sort_order
+                          )}
+                        </button>
+                      </th>
+                    <% end %>
                   </tr>
                 </thead>
                 <tbody>
-                  <%= for {%{module: module, score: score, breakdown: _breakdown}, idx} <- Enum.with_index(@modules) do %>
-                    <tr class={if rem(idx, 2) == 0, do: "bg-base-200", else: ""}>
+                  <%= for %{module: module, score: score} <- @modules do %>
+                    <tr class="hover:bg-base-200">
+                      <!-- Module Name -->
+                      <td class="sticky left-0 bg-base-100 z-10">
+                        <div class="font-medium text-sm">{module[:name] || module.name}</div>
+                        <%= if module[:has_contract] do %>
+                          <span class="badge badge-success badge-xs">For Sale</span>
+                        <% else %>
+                          <span class="badge badge-ghost badge-xs">Est. Value</span>
+                        <% end %>
+                      </td>
+                      <!-- Base Module -->
                       <td>
-                        <div class="font-medium">{module[:name] || module.name}</div>
-                        <div class="text-xs text-gray-500">
-                          {module[:type_name] || module.type_name}
+                        <div class="text-xs">
+                          <div class="font-medium">{module[:source_type_name] || "Unknown"}</div>
+                          <%= if module[:source_meta_group] do %>
+                            <span class={[
+                              "badge badge-xs",
+                              meta_group_color(module[:source_meta_group])
+                            ]}>
+                              {module[:source_meta_group]}
+                            </span>
+                          <% end %>
                         </div>
                       </td>
-                      <td>
-                        <div class="flex items-center gap-2">
+                      <!-- Score -->
+                      <td class="text-center">
+                        <div class="flex items-center justify-center gap-1">
                           <div
                             class={"radial-progress text-xs #{score_color(score)}"}
-                            style={"--value:#{round(score * 100)}; --size:2rem;"}
+                            style={"--value:#{round(score * 100)}; --size:2rem; --thickness:3px;"}
+                            role="progressbar"
                           >
-                            {round(score * 100)}
+                            <span class="text-[10px]">{round(score * 100)}</span>
                           </div>
                         </div>
                       </td>
-                      <td>
-                        <span class="font-mono">
+                      <!-- Price -->
+                      <td class="text-right">
+                        <span class="font-mono text-sm">
                           {format_price(module[:price] || module.price)}
                         </span>
                       </td>
-                      <td>
-                        <div class="text-xs space-y-1">
-                          <%= for {attr, value} <- Enum.take(module[:attributes] || module.attributes || %{}, 3) do %>
-                            <div>
-                              <span class="text-gray-500">{attr}:</span>
-                              <span class="font-medium">{format_attribute_value(value)}</span>
-                            </div>
-                          <% end %>
-                          <%= if map_size(module[:attributes] || module.attributes || %{}) > 3 do %>
-                            <div class="text-gray-400">
-                              +{map_size(module[:attributes] || module.attributes || %{}) - 3} more
-                            </div>
-                          <% end %>
-                        </div>
-                      </td>
+                      <!-- Dynamic attribute values -->
+                      <%= for attr_name <- @display_attributes do %>
+                        <td class="text-right">
+                          <.attribute_cell
+                            attrs={module[:attributes] || module.attributes || %{}}
+                            attr_name={attr_name}
+                            available_attributes={@available_attributes}
+                          />
+                        </td>
+                      <% end %>
                     </tr>
                   <% end %>
                 </tbody>
               </table>
+            </div>
+            
+    <!-- Legend -->
+            <div class="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+              <div class="flex items-center gap-1">
+                <span class="w-3 h-3 bg-success rounded"></span>
+                <span>Better than base</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="w-3 h-3 bg-error rounded"></span>
+                <span>Worse than base</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="w-3 h-3 bg-base-300 rounded"></span>
+                <span>Same as base</span>
+              </div>
             </div>
           <% end %>
         </div>
@@ -757,6 +871,106 @@ defmodule AbyssalwatchWeb.SearchLive do
     </div>
     """
   end
+
+  # Attribute cell component with color coding
+  defp attribute_cell(assigns) do
+    attrs = assigns.attrs
+    attr_name = assigns.attr_name
+    available_attributes = assigns.available_attributes
+
+    attr_data = Map.get(attrs, attr_name)
+
+    {value, base_value, unit} =
+      case attr_data do
+        %{"value" => v, "base_value" => bv, "unit" => u} -> {v, bv, u}
+        %{"value" => v, "base_value" => bv} -> {v, bv, nil}
+        %{"value" => v} -> {v, nil, nil}
+        v when is_number(v) -> {v, nil, nil}
+        _ -> {nil, nil, nil}
+      end
+
+    # Determine if higher is better for this attribute
+    direction =
+      Enum.find_value(available_attributes, "higher_better", fn attr ->
+        if attr.name == attr_name || attr.display_name == attr_name do
+          attr.direction
+        end
+      end)
+
+    # Calculate color based on value vs base
+    color_class =
+      cond do
+        is_nil(value) -> ""
+        is_nil(base_value) -> ""
+        value == base_value -> "text-base-content"
+        direction == "higher_better" and value > base_value -> "text-success font-semibold"
+        direction == "higher_better" and value < base_value -> "text-error"
+        direction == "lower_better" and value < base_value -> "text-success font-semibold"
+        direction == "lower_better" and value > base_value -> "text-error"
+        true -> ""
+      end
+
+    # Calculate percent change
+    pct_change =
+      if value && base_value && base_value != 0 do
+        ((value - base_value) / abs(base_value) * 100) |> Float.round(1)
+      else
+        nil
+      end
+
+    assigns =
+      assigns
+      |> assign(:value, value)
+      |> assign(:base_value, base_value)
+      |> assign(:unit, unit)
+      |> assign(:color_class, color_class)
+      |> assign(:pct_change, pct_change)
+
+    ~H"""
+    <div class="text-xs">
+      <%= if @value do %>
+        <div class={@color_class}>
+          {format_attribute_value(@value)}
+          <%= if @unit do %>
+            <span class="text-gray-400 ml-0.5">{@unit}</span>
+          <% end %>
+        </div>
+        <%= if @pct_change do %>
+          <div class={[
+            "text-[10px]",
+            if(@pct_change > 0,
+              do: "text-success",
+              else: if(@pct_change < 0, do: "text-error", else: "text-gray-400")
+            )
+          ]}>
+            <%= if @pct_change > 0 do %>
+              +
+            <% end %>
+            {@pct_change}%
+          </div>
+        <% end %>
+      <% else %>
+        <span class="text-gray-400">-</span>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp truncate_attr_name(name) when is_binary(name) do
+    if String.length(name) > 12 do
+      String.slice(name, 0, 10) <> "..."
+    else
+      name
+    end
+  end
+
+  defp truncate_attr_name(name), do: to_string(name)
+
+  defp meta_group_color("Tech II"), do: "badge-info"
+  defp meta_group_color("Faction"), do: "badge-warning"
+  defp meta_group_color("Deadspace"), do: "badge-secondary"
+  defp meta_group_color("Officer"), do: "badge-accent"
+  defp meta_group_color(_), do: "badge-ghost"
 
   defp sort_indicator(column, current_sort, order) do
     if column == current_sort do

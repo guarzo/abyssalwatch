@@ -231,6 +231,17 @@ defmodule Abyssalwatch.Market.Scoring.Topsis do
       nil ->
         0.0
 
+      # New structure with value/base_value map
+      %{"value" => value} when is_number(value) ->
+        value / 1.0
+
+      %{"value" => value} when is_binary(value) ->
+        case Float.parse(value) do
+          {float, _} -> float
+          :error -> 0.0
+        end
+
+      # Legacy: direct numeric value
       value when is_number(value) ->
         value / 1.0
 

@@ -421,6 +421,16 @@
     animation: skeleton-pulse 1.6s var(--motion-ease) infinite;
   }
 
+  /* One-shot flash for new notification arrivals */
+  @keyframes glyph-flash {
+    0%   { opacity: 1; }
+    50%  { opacity: 0.45; }
+    100% { opacity: 1; }
+  }
+  .animate-glyph-flash {
+    animation: glyph-flash 800ms var(--motion-ease) 1;
+  }
+
   /* Topbar */
   .topbar {
     display: flex;

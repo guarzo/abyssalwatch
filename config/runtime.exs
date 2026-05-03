@@ -1,5 +1,18 @@
 import Config
 
+# Load .env file in development. The file is gitignored; copy .env.example
+# to .env and fill in your values. dotenvy is only available in :dev and
+# :test (see mix.exs), so this block is a no-op in :prod.
+if config_env() == :dev and Code.ensure_loaded?(Dotenvy) do
+  env_path = Path.expand("../.env", __DIR__)
+
+  if File.exists?(env_path) do
+    env_path
+    |> Dotenvy.source!()
+    |> System.put_env()
+  end
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

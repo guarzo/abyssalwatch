@@ -706,6 +706,24 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp format_score(_), do: "—"
 
+  defp watch_url(module_type, filters) do
+    base = [{"action", "new"}, {"type_id", to_string(module_type.eve_type_id)}]
+
+    optional =
+      [
+        {"max_price", decimal_to_param(filters[:max_price])},
+        {"min_score", filters[:min_score]}
+      ]
+      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+      |> Enum.map(fn {k, v} -> {k, to_string(v)} end)
+
+    "/watchlists?" <> URI.encode_query(base ++ optional)
+  end
+
+  defp decimal_to_param(nil), do: nil
+  defp decimal_to_param(%Decimal{} = d), do: Decimal.to_string(d)
+  defp decimal_to_param(other), do: other
+
   defp percent_position(value, %{min: mn, max: mx})
        when is_number(value) and is_number(mn) and is_number(mx) and mx > mn do
     pct = (value - mn) / (mx - mn) * 100
@@ -799,6 +817,7 @@ defmodule AbyssalwatchWeb.SearchLive do
       :if={@selected_module}
       entry={@selected_module}
       module_type={@selected_type}
+      filters={@filters}
       copy_state={@copy_state}
     />
     """
@@ -1299,6 +1318,7 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   attr :entry, :map, required: true
   attr :module_type, :any, required: true
+  attr :filters, :map, required: true
   attr :copy_state, :atom, required: true
 
   defp detail_drawer(assigns) do
@@ -1406,6 +1426,14 @@ defmodule AbyssalwatchWeb.SearchLive do
         <span :if={!@contract} class="text-[12px] text-ink-4 flex-1">
           No contract URL provided.
         </span>
+        <.link
+          :if={@module_type}
+          navigate={watch_url(@module_type, @filters)}
+          class="btn btn-ghost"
+          title="Create a watchlist for this module type"
+        >
+          <.icon name="hero-bell-alert" class="size-4" /> Watch
+        </.link>
         <a
           :if={@contract}
           href={@contract}

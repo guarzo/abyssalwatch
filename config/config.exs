@@ -7,6 +7,11 @@
 # General application configuration
 import Config
 
+# Register custom MIME types so LiveView's allow_upload accepts these extensions.
+config :mime, :types, %{
+  "text/plain" => ["eft"]
+}
+
 config :abyssalwatch,
   ecto_repos: [Abyssalwatch.Repo],
   generators: [timestamp_type: :utc_datetime],

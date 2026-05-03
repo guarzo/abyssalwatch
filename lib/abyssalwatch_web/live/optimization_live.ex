@@ -24,6 +24,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
+     |> assign(:active, :optimize)
      |> assign(:fitting, nil)
      |> assign(:eft_input, "")
      |> assign(:eft_error, nil)
@@ -45,7 +46,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
      |> assign(:copy_state, :idle)
      |> assign(:confirming_clear, false)
      |> allow_upload(:eft_file,
-       accept: ~w(.txt .eft),
+       accept: ~w(.txt),
        max_entries: 1,
        max_file_size: 100_000
      )}
@@ -914,7 +915,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
         type="number"
         name={@name}
         class="input input-sm tnum w-24 text-right"
-        value={@value}
+        value={format_float(@value)}
         step="0.1"
       />
     </div>
@@ -1123,7 +1124,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   defp runbar(assigns) do
     ~H"""
     <div class="panel">
-      <div class="px-5 py-3 flex items-center gap-4">
+      <div class="px-5 py-3 flex items-center gap-3 flex-wrap">
         <%= if @optimizing do %>
           <button type="button" class="btn btn-sm btn-danger" phx-click="cancel_optimize">
             Cancel
@@ -1152,7 +1153,9 @@ defmodule AbyssalwatchWeb.OptimizationLive do
           <span class="text-[12px] text-ink-3 tnum">
             {length(@included_type_ids)} {pluralize(length(@included_type_ids), "type", "types")}
           </span>
-          <span class="text-[12px] text-ink-3 ml-auto">Ctrl-Enter to run</span>
+          <span class="hidden md:inline text-[12px] text-ink-3 md:ml-auto whitespace-nowrap">
+            Ctrl-Enter to run
+          </span>
         <% end %>
       </div>
 
@@ -1494,6 +1497,17 @@ defmodule AbyssalwatchWeb.OptimizationLive do
     do: :erlang.float_to_binary(score * 1.0, decimals: 2)
 
   defp format_score(_), do: "—"
+
+  defp format_float(value) when is_float(value) do
+    if value == Float.round(value, 0) do
+      Integer.to_string(trunc(value))
+    else
+      :erlang.float_to_binary(value, decimals: 1)
+    end
+  end
+
+  defp format_float(value) when is_integer(value), do: Integer.to_string(value)
+  defp format_float(value), do: to_string(value)
 
   defp format_price_plain(nil), do: "—"
 

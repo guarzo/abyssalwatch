@@ -29,6 +29,7 @@ defmodule AbyssalwatchWeb.NotificationLive do
 
     {:ok,
      socket
+     |> assign(:active, :notifications)
      |> assign(:user_id, user_id)
      |> assign(:notifications, notifications)
      |> assign(:watchlists, watchlists)

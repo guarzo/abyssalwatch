@@ -29,6 +29,7 @@ defmodule AbyssalwatchWeb.DashboardLive do
 
     {:ok,
      socket
+     |> assign(:active, :dashboard)
      |> assign(:user_id, user_id)
      |> assign(:current_user, user)
      |> assign(:session_id, session_id)

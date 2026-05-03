@@ -14,6 +14,7 @@ defmodule AbyssalwatchWeb.SearchLive do
 
     {:ok,
      socket
+     |> assign(:active, :search)
      |> assign(:session_id, session_id)
      |> assign(:module_types, module_types)
      |> assign(:selected_type, nil)

@@ -36,7 +36,7 @@ defmodule AbyssalwatchWeb.Layouts do
     <header class="topbar">
       <a href="/" class="topbar-brand">
         <span class="topbar-brand-mark" aria-hidden="true" />
-        <span>AbyssalWatch</span>
+        <span class="hidden sm:inline">AbyssalWatch</span>
       </a>
 
       <nav class="topbar-nav" aria-label="Primary">

@@ -28,6 +28,7 @@ defmodule AbyssalwatchWeb.WatchlistLive do
 
     {:ok,
      socket
+     |> assign(:active, :watchlists)
      |> assign(:user_id, user_id)
      |> assign(:watchlists, watchlists)
      |> assign(:module_types, module_types)

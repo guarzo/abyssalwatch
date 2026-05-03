@@ -1,737 +1,467 @@
 defmodule AbyssalwatchWeb.DashboardLive do
+  @moduledoc """
+  Quiet status landing page.
+
+  Three sections in a single reading column: recent unread matches,
+  active watchlists, recent searches. Operator metrics (cache size,
+  ETS memory, module-type counts) are deliberately absent unless
+  something is actually broken (monitor paused), in which case a
+  small footer surfaces it. Anonymous pilots see a sign-in CTA in
+  place of the activity sections.
+
+  See PRODUCT.md and DESIGN.md for the visual language.
+  """
   use AbyssalwatchWeb, :live_view
 
-  alias Abyssalwatch.Market.ModuleType
-  alias Abyssalwatch.Market.Mutamarket.Cache
   alias Abyssalwatch.Watchlists.{Watchlist, Notification, Monitor, Notifier}
   alias Abyssalwatch.Preferences.Store, as: Preferences
 
   @impl true
   def mount(_params, session, socket) do
-    # current_user is set by LiveAuth on_mount hook
     user = socket.assigns[:current_user]
     user_id = user && user.id
     session_id = session["session_id"]
 
     if connected?(socket) do
-      # Refresh stats every 30 seconds
-      :timer.send_interval(30_000, self(), :refresh_stats)
-
-      # Subscribe to notifications if user is logged in
-      if user_id do
-        Notifier.subscribe(user_id)
-      end
+      :timer.send_interval(30_000, self(), :refresh)
+      if user_id, do: Notifier.subscribe(user_id)
     end
-
-    # Get recent searches from preferences store
-    recent_searches = Preferences.get_recent_searches(session_id)
-
-    # Calculate market stats from cache
-    market_stats = calculate_market_stats()
 
     {:ok,
      socket
-     |> assign(:session_id, session_id)
      |> assign(:user_id, user_id)
-     |> assign(:module_types, load_module_types())
-     |> assign(:cache_stats, Cache.stats())
-     |> assign(:stats, calculate_stats(user_id))
-     |> assign(:market_stats, market_stats)
-     |> assign(:monitor_status, get_monitor_status())
-     |> assign(:recent_searches, recent_searches)}
+     |> assign(:current_user, user)
+     |> assign(:session_id, session_id)
+     |> load_dashboard()}
   end
 
   @impl true
-  def handle_info(:refresh_stats, socket) do
-    {:noreply,
-     socket
-     |> assign(:cache_stats, Cache.stats())
-     |> assign(:stats, calculate_stats(socket.assigns.user_id))
-     |> assign(:market_stats, calculate_market_stats())
-     |> assign(:monitor_status, get_monitor_status())}
+  def handle_info(:refresh, socket) do
+    {:noreply, load_dashboard(socket)}
   end
 
   @impl true
-  def handle_info({:new_notification, payload}, socket) do
-    {:noreply,
-     socket
-     |> assign(:stats, calculate_stats(socket.assigns.user_id))
-     |> put_flash(:info, "New match for #{payload.watchlist_name}: #{payload.module_name}")}
+  def handle_info({:new_notification, _payload}, socket) do
+    {:noreply, load_dashboard(socket)}
   end
 
   @impl true
-  def handle_info(_, socket), do: {:noreply, socket}
+  def handle_info(_msg, socket), do: {:noreply, socket}
 
-  defp load_module_types do
-    case Ash.read(ModuleType) do
-      {:ok, types} -> types
-      {:error, _} -> []
+  @impl true
+  def handle_event("resume_monitor", _params, socket) do
+    Monitor.resume()
+    {:noreply, load_dashboard(socket)}
+  end
+
+  defp load_dashboard(socket) do
+    user_id = socket.assigns.user_id
+
+    socket
+    |> assign(:recent_matches, load_recent_matches(user_id))
+    |> assign(:active_watchlists, load_active_watchlists(user_id))
+    |> assign(:unread_count, load_unread_count(user_id))
+    |> assign(:active_watchlist_count, load_active_watchlist_count(user_id))
+    |> assign(:recent_searches, Preferences.get_recent_searches(socket.assigns.session_id))
+    |> assign(:monitor_status, get_monitor_status())
+  end
+
+  defp load_recent_matches(nil), do: []
+
+  defp load_recent_matches(user_id) do
+    unread =
+      case Ash.read(Notification, action: :unread_for_user, args: %{user_id: user_id}) do
+        {:ok, ns} -> Enum.take(ns, 5)
+        {:error, _} -> []
+      end
+
+    if Enum.empty?(unread) do
+      case Ash.read(Notification, action: :for_user, args: %{user_id: user_id}) do
+        {:ok, ns} -> Enum.take(ns, 3)
+        {:error, _} -> []
+      end
+    else
+      unread
     end
   end
 
-  defp calculate_stats(user_id) do
-    base_stats = %{
-      module_type_count: length(load_module_types()),
-      cache_size: Cache.stats().size,
-      cache_memory: Cache.stats().memory
-    }
+  defp load_active_watchlists(nil), do: []
 
-    watchlist_stats = calculate_watchlist_stats(user_id)
-    Map.merge(base_stats, watchlist_stats)
+  defp load_active_watchlists(user_id) do
+    case Ash.read(Watchlist, action: :for_user, args: %{user_id: user_id}) do
+      {:ok, watchlists} ->
+        watchlists
+        |> Enum.filter(& &1.notifications_enabled)
+        |> Enum.sort_by(
+          fn w -> {w.last_checked_at || ~U[1970-01-01 00:00:00Z], w.match_count || 0} end,
+          :desc
+        )
+        |> Enum.take(3)
+
+      {:error, _} ->
+        []
+    end
   end
 
-  defp calculate_watchlist_stats(nil) do
-    %{
-      watchlist_count: 0,
-      active_watchlist_count: 0,
-      unread_notification_count: 0,
-      total_matches: 0
-    }
+  defp load_unread_count(nil), do: 0
+
+  defp load_unread_count(user_id) do
+    case Ash.read(Notification, action: :unread_for_user, args: %{user_id: user_id}) do
+      {:ok, ns} -> length(ns)
+      {:error, _} -> 0
+    end
   end
 
-  defp calculate_watchlist_stats(user_id) do
-    watchlists =
-      case Ash.read(Watchlist, action: :for_user, args: %{user_id: user_id}) do
-        {:ok, watchlists} -> watchlists
-        {:error, _} -> []
-      end
+  defp load_active_watchlist_count(nil), do: 0
 
-    unread_notifications =
-      case Ash.read(Notification, action: :unread_for_user, args: %{user_id: user_id}) do
-        {:ok, notifications} -> notifications
-        {:error, _} -> []
-      end
-
-    %{
-      watchlist_count: length(watchlists),
-      active_watchlist_count: Enum.count(watchlists, & &1.notifications_enabled),
-      unread_notification_count: length(unread_notifications),
-      total_matches: Enum.sum(Enum.map(watchlists, & &1.match_count))
-    }
+  defp load_active_watchlist_count(user_id) do
+    case Ash.read(Watchlist, action: :for_user, args: %{user_id: user_id}) do
+      {:ok, watchlists} -> Enum.count(watchlists, & &1.notifications_enabled)
+      {:error, _} -> 0
+    end
   end
 
   defp get_monitor_status do
-    try do
-      Monitor.status()
-    rescue
-      _ -> %{paused: true, last_check: nil, stats: %{total_checks: 0, total_matches: 0}}
-    catch
-      :exit, _ -> %{paused: true, last_check: nil, stats: %{total_checks: 0, total_matches: 0}}
+    Monitor.status()
+  rescue
+    _ -> %{paused: false, last_check: nil, stats: %{total_checks: 0, total_matches: 0}}
+  catch
+    :exit, _ -> %{paused: false, last_check: nil, stats: %{total_checks: 0, total_matches: 0}}
+  end
+
+  defp watchlist_name_for(_watchlists, nil), do: nil
+
+  defp watchlist_name_for(watchlists, id) do
+    case Enum.find(watchlists, &(&1.id == id)) do
+      nil -> nil
+      w -> w.name
     end
   end
 
-  defp calculate_market_stats do
-    # Get all cached module data
-    cached_modules = get_all_cached_modules()
-
-    if Enum.empty?(cached_modules) do
-      %{
-        active_listings: 0,
-        average_value: Decimal.new(0),
-        top_modules: []
-      }
-    else
-      prices =
-        cached_modules
-        |> Enum.map(fn m -> m[:price] || Decimal.new(0) end)
-        |> Enum.reject(&(Decimal.compare(&1, Decimal.new(0)) == :eq))
-
-      avg_value =
-        if Enum.empty?(prices) do
-          Decimal.new(0)
-        else
-          total = Enum.reduce(prices, Decimal.new(0), &Decimal.add/2)
-          Decimal.div(total, Decimal.new(length(prices)))
-        end
-
-      # Get top modules by price (most valuable)
-      top_modules =
-        cached_modules
-        |> Enum.filter(fn m ->
-          price = m[:price] || Decimal.new(0)
-          Decimal.compare(price, Decimal.new(0)) == :gt
-        end)
-        |> Enum.sort_by(fn m -> Decimal.to_float(m[:price] || Decimal.new(0)) end, :desc)
-        |> Enum.take(5)
-
-      %{
-        active_listings: length(cached_modules),
-        average_value: avg_value,
-        top_modules: top_modules
-      }
-    end
-  end
-
-  defp get_all_cached_modules do
-    # Get all cached data from the ETS cache
-    # Cache stores data by key {:modules_by_type, type_id}
-    try do
-      Cache.all_entries()
-      |> Enum.flat_map(fn
-        {{:modules_by_type, _type_id}, modules} when is_list(modules) -> modules
-        _ -> []
-      end)
-    rescue
-      _ -> []
-    catch
-      _ -> []
-    end
-  end
+  # ── Render ────────────────────────────────────────────────────────
 
   @impl true
   def render(assigns) do
+    signed_in = not is_nil(assigns.user_id)
+
+    assigns =
+      assigns
+      |> assign(:signed_in, signed_in)
+      |> assign(:has_recent_searches, Enum.any?(assigns.recent_searches))
+      |> assign(:monitor_broken, monitor_broken?(assigns.monitor_status))
+
     ~H"""
-    <div class="container mx-auto px-4 py-8">
-      <h1 class="text-3xl font-bold mb-8">AbyssalWatch Dashboard</h1>
-      
-    <!-- Stats Cards - Row 1 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-primary">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Module Types</div>
-          <div class="stat-value text-primary">{@stats.module_type_count}</div>
-          <div class="stat-desc">Supported abyssal types</div>
-        </div>
+    <div class="max-w-[720px] mx-auto">
+      <header class="pb-5 mb-6 border-b border-rule-1">
+        <%= if @signed_in do %>
+          <h1 class="text-[22px] leading-[30px] font-semibold text-ink-1 tracking-tight">
+            Welcome back, {@current_user.character_name}
+          </h1>
+          <p class="mt-1 text-[13px] text-ink-3">
+            <.welcome_subtitle
+              unread_count={@unread_count}
+              active_watchlist_count={@active_watchlist_count}
+            />
+          </p>
+        <% else %>
+          <h1 class="text-[22px] leading-[30px] font-semibold text-ink-1 tracking-tight">
+            Welcome
+          </h1>
+          <p class="mt-1 text-[13px] text-ink-3">
+            Sign in to save watchlists and get notified on matches.
+          </p>
+        <% end %>
+      </header>
 
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-secondary">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Watchlists</div>
-          <div class="stat-value text-secondary">{@stats.watchlist_count}</div>
-          <div class="stat-desc">{@stats.active_watchlist_count} active</div>
-        </div>
-
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-warning">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Notifications</div>
-          <div class="stat-value text-warning">{@stats.unread_notification_count}</div>
-          <div class="stat-desc">Unread alerts</div>
-        </div>
-
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-success">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Total Matches</div>
-          <div class="stat-value text-success">{@stats.total_matches}</div>
-          <div class="stat-desc">Modules matched</div>
-        </div>
-      </div>
-      
-    <!-- Stats Cards - Row 2 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-accent">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Cache Entries</div>
-          <div class="stat-value text-accent">{@cache_stats.size}</div>
-          <div class="stat-desc">Cached API responses</div>
-        </div>
-
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-info">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Cache Memory</div>
-          <div class="stat-value text-info">{format_memory(@cache_stats.memory)}</div>
-          <div class="stat-desc">ETS memory usage</div>
-        </div>
-
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-primary">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Monitor</div>
-          <div class="stat-value text-lg">
-            {if @monitor_status.paused, do: "Paused", else: "Running"}
-          </div>
-          <div class="stat-desc">
-            <%= if @monitor_status.last_check do %>
-              Last: {format_time_ago(@monitor_status.last_check)}
-            <% else %>
-              Not yet checked
-            <% end %>
-          </div>
-        </div>
-
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-secondary">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Status</div>
-          <div class="stat-value text-lg text-success">Online</div>
-          <div class="stat-desc">All systems operational</div>
-        </div>
-      </div>
-      
-    <!-- Market Stats -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-primary">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Active Listings</div>
-          <div class="stat-value text-primary">{@market_stats.active_listings}</div>
-          <div class="stat-desc">Modules in cache</div>
-        </div>
-
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-secondary">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Average Value</div>
-          <div class="stat-value text-secondary text-lg">
-            {format_isk(@market_stats.average_value)}
-          </div>
-          <div class="stat-desc">Across all cached modules</div>
-        </div>
-
-        <div class="stat bg-base-200 rounded-lg">
-          <div class="stat-figure text-accent">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              class="inline-block w-8 h-8 stroke-current"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
-              >
-              </path>
-            </svg>
-          </div>
-          <div class="stat-title">Top Module Value</div>
-          <div class="stat-value text-accent text-lg">
-            <%= if Enum.any?(@market_stats.top_modules) do %>
-              {format_isk(hd(@market_stats.top_modules)[:price])}
-            <% else %>
-              N/A
-            <% end %>
-          </div>
-          <div class="stat-desc">Highest priced in cache</div>
-        </div>
-      </div>
-      
-    <!-- Top Modules Table -->
-      <%= if Enum.any?(@market_stats.top_modules) do %>
-        <div class="card bg-base-200 mb-8">
-          <div class="card-body">
-            <h2 class="card-title mb-4">Top Modules by Value</h2>
-            <div class="overflow-x-auto">
-              <table class="table table-zebra w-full">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for module <- @market_stats.top_modules do %>
-                    <tr>
-                      <td class="font-medium">{module[:name] || "Unknown"}</td>
-                      <td class="text-sm text-gray-500">{module[:type_name] || "N/A"}</td>
-                      <td class="font-mono">{format_isk(module[:price])}</td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      <%= if @signed_in do %>
+        <.recent_matches_section
+          matches={@recent_matches}
+          watchlists={@active_watchlists}
+        />
+        <.active_watchlists_section watchlists={@active_watchlists} />
+      <% else %>
+        <.signed_out_panel />
       <% end %>
-      
-    <!-- Quick Actions -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div class="card bg-base-200">
-          <div class="card-body">
-            <h2 class="card-title">Quick Actions</h2>
-            <div class="flex flex-wrap gap-2">
-              <a href="/search" class="btn btn-primary">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 mr-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                Search Modules
-              </a>
-              <a href="/watchlists" class="btn btn-secondary">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 mr-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
-                Watchlists
-              </a>
-              <a href="/notifications" class="btn btn-accent">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5 mr-2"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-                  />
-                </svg>
-                Notifications
-                <%= if @stats.unread_notification_count > 0 do %>
-                  <span class="badge badge-warning">{@stats.unread_notification_count}</span>
-                <% end %>
-              </a>
-            </div>
-          </div>
-        </div>
 
-        <div class="card bg-base-200">
-          <div class="card-body">
-            <h2 class="card-title">System Health</h2>
-            <div class="space-y-2">
-              <div class="flex justify-between items-center">
-                <span>Database</span>
-                <span class="badge badge-success">Connected</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Cache</span>
-                <span class="badge badge-success">Active</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Rate Limiter</span>
-                <span class="badge badge-success">Running</span>
-              </div>
-              <div class="flex justify-between items-center">
-                <span>Watchlist Monitor</span>
-                <span class={"badge #{if @monitor_status.paused, do: "badge-warning", else: "badge-success"}"}>
-                  {if @monitor_status.paused, do: "Paused", else: "Running"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-    <!-- Recent Searches -->
-      <%= if Enum.any?(@recent_searches) do %>
-        <div class="card bg-base-200 mb-8">
-          <div class="card-body">
-            <h2 class="card-title mb-4">Recent Searches</h2>
-            <div class="overflow-x-auto">
-              <table class="table table-zebra w-full">
-                <thead>
-                  <tr>
-                    <th>Module Type</th>
-                    <th>Preset</th>
-                    <th>Results</th>
-                    <th>Time</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <%= for search <- @recent_searches do %>
-                    <tr>
-                      <td class="font-medium">{search.type_name}</td>
-                      <td>
-                        <span class="badge badge-outline">
-                          {String.capitalize(search.preset)}
-                        </span>
-                      </td>
-                      <td>{search.result_count} modules</td>
-                      <td class="text-sm text-gray-500">
-                        {format_search_time(search.searched_at)}
-                      </td>
-                      <td>
-                        <a
-                          href={"/search?type_id=#{search.type_id}&preset=#{search.preset}"}
-                          class="btn btn-xs btn-ghost"
-                        >
-                          Search Again
-                        </a>
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      <%= if @has_recent_searches do %>
+        <.recent_searches_section searches={@recent_searches} />
       <% end %>
-      
-    <!-- Module Types -->
-      <div class="card bg-base-200">
-        <div class="card-body">
-          <h2 class="card-title mb-4">Supported Module Types</h2>
-          <div class="overflow-x-auto">
-            <table class="table table-zebra w-full">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Category</th>
-                  <th>Slot</th>
-                  <th>EVE Type ID</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                <%= for type <- @module_types do %>
-                  <tr>
-                    <td class="font-medium">{type.name}</td>
-                    <td>
-                      <span class={"badge #{category_badge_class(type.category)}"}>
-                        {type.category}
-                      </span>
-                    </td>
-                    <td>
-                      <span class={"badge #{slot_badge_class(type.slot_type)}"}>
-                        {type.slot_type}
-                      </span>
-                    </td>
-                    <td class="font-mono text-sm">{type.eve_type_id}</td>
-                    <td>
-                      <a href={"/search?type_id=#{type.eve_type_id}"} class="btn btn-xs btn-ghost">
-                        Search
-                      </a>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+
+      <.monitor_footer :if={@monitor_broken} status={@monitor_status} />
     </div>
     """
   end
 
-  defp format_time_ago(nil), do: "never"
+  attr :unread_count, :integer, required: true
+  attr :active_watchlist_count, :integer, required: true
 
-  defp format_time_ago(datetime) do
-    diff = DateTime.diff(DateTime.utc_now(), datetime, :second)
-
-    cond do
-      diff < 60 -> "just now"
-      diff < 3600 -> "#{div(diff, 60)} min ago"
-      diff < 86400 -> "#{div(diff, 3600)} hours ago"
-      true -> "#{div(diff, 86400)} days ago"
-    end
+  defp welcome_subtitle(assigns) do
+    ~H"""
+    <%= cond do %>
+      <% @unread_count == 0 and @active_watchlist_count == 0 -> %>
+        Quiet so far.
+      <% @unread_count == 0 -> %>
+        <span class="tnum">{@active_watchlist_count}</span> active
+        {pluralize(@active_watchlist_count, "watchlist", "watchlists")}.
+      <% @active_watchlist_count == 0 -> %>
+        <span class="tnum">{@unread_count}</span> unread
+        {pluralize(@unread_count, "notification", "notifications")}.
+      <% true -> %>
+        <span class="tnum">{@unread_count}</span> unread
+        {pluralize(@unread_count, "notification", "notifications")}
+        <span class="text-ink-4">·</span>
+        <span class="tnum">{@active_watchlist_count}</span> active
+        {pluralize(@active_watchlist_count, "watchlist", "watchlists")}.
+    <% end %>
+    """
   end
 
-  defp format_search_time(nil), do: "unknown"
+  defp pluralize(1, s, _), do: s
+  defp pluralize(_, _, p), do: p
 
-  defp format_search_time(%DateTime{} = datetime) do
-    format_time_ago(datetime)
+  # ── Recent matches ────────────────────────────────────────────────
+
+  attr :matches, :list, required: true
+  attr :watchlists, :list, required: true
+
+  defp recent_matches_section(assigns) do
+    ~H"""
+    <section class="mb-8">
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">
+          Recent matches
+        </h2>
+        <.link navigate={~p"/notifications"} class="text-[12px] text-ink-3 hover:text-ink-1">
+          View all →
+        </.link>
+      </div>
+
+      <%= if Enum.empty?(@matches) do %>
+        <p class="text-[13px] text-ink-3">
+          No matches yet. Watchlists check the market every few minutes.
+        </p>
+      <% else %>
+        <ul class="divide-y divide-rule-1 border-y border-rule-1">
+          <%= for n <- @matches do %>
+            <li>
+              <.link
+                navigate={~p"/notifications"}
+                class="flex items-center gap-3 px-1 py-2.5 hover:bg-surface-2 transition-colors"
+              >
+                <span
+                  class={[
+                    "text-[10px] leading-none",
+                    not n.read && "text-accent",
+                    n.read && "text-ink-4"
+                  ]}
+                  aria-hidden="true"
+                >
+                  <%= if n.read, do: "○", else: "●" %>
+                </span>
+                <span class="flex-1 min-w-0">
+                  <span class={[
+                    "block text-[13px] truncate",
+                    not n.read && "text-ink-1 font-medium",
+                    n.read && "text-ink-2"
+                  ]}>
+                    {n.module_name || "Unknown module"}
+                  </span>
+                  <span class="block text-[11px] text-ink-4 truncate">
+                    {watchlist_name_for(@watchlists, n.watchlist_id) || "watchlist"}
+                  </span>
+                </span>
+                <span class="text-[12px] text-ink-2 tnum shrink-0">
+                  {format_score(n.module_score)}
+                </span>
+                <span class="text-[12px] text-ink-3 tnum shrink-0 w-24 text-right">
+                  {format_price_plain(n.module_price)}
+                </span>
+                <span class="text-[11px] text-ink-4 tnum shrink-0 w-12 text-right">
+                  {time_ago(n.sent_at)}
+                </span>
+              </.link>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    </section>
+    """
   end
 
-  defp format_search_time(_), do: "unknown"
+  # ── Active watchlists ─────────────────────────────────────────────
 
-  defp format_memory(words) when is_integer(words) do
-    bytes = words * :erlang.system_info(:wordsize)
+  attr :watchlists, :list, required: true
 
-    cond do
-      bytes >= 1_000_000 -> "#{Float.round(bytes / 1_000_000, 2)} MB"
-      bytes >= 1_000 -> "#{Float.round(bytes / 1_000, 2)} KB"
-      true -> "#{bytes} B"
-    end
+  defp active_watchlists_section(assigns) do
+    ~H"""
+    <section class="mb-8">
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">
+          Active watchlists
+        </h2>
+        <.link navigate={~p"/watchlists"} class="text-[12px] text-ink-3 hover:text-ink-1">
+          Manage →
+        </.link>
+      </div>
+
+      <%= if Enum.empty?(@watchlists) do %>
+        <p class="text-[13px] text-ink-3">
+          No active watchlists.
+          <.link navigate={~p"/watchlists?action=new"} class="text-ink-2 hover:text-ink-1 underline underline-offset-2 ml-1">
+            Create one →
+          </.link>
+        </p>
+      <% else %>
+        <ul class="divide-y divide-rule-1 border-y border-rule-1">
+          <%= for w <- @watchlists do %>
+            <li>
+              <.link
+                navigate={~p"/watchlists?id=#{w.id}"}
+                class="flex items-center gap-3 px-1 py-2.5 hover:bg-surface-2 transition-colors"
+              >
+                <span class="text-status-ready text-[10px] leading-none" aria-hidden="true">●</span>
+                <span class="flex-1 min-w-0">
+                  <span class="block text-[13px] text-ink-1 truncate">{w.name}</span>
+                  <span class="block text-[11px] text-ink-4 truncate">
+                    {w.module_type_name}
+                  </span>
+                </span>
+                <span class="text-[12px] text-ink-2 tnum shrink-0">
+                  <span class="tnum">{w.match_count || 0}</span>
+                  {pluralize(w.match_count || 0, "match", "matches")}
+                </span>
+                <span class="text-[11px] text-ink-4 tnum shrink-0 w-20 text-right">
+                  {if w.last_checked_at, do: "last " <> time_ago(w.last_checked_at), else: "—"}
+                </span>
+              </.link>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+    </section>
+    """
   end
 
-  defp format_memory(_), do: "N/A"
+  # ── Recent searches ───────────────────────────────────────────────
 
-  defp category_badge_class(category) do
-    case category do
-      "Tackle" -> "badge-error"
-      "Propulsion" -> "badge-info"
-      "Shield" -> "badge-primary"
-      "Armor" -> "badge-warning"
-      "Tank" -> "badge-success"
-      _ -> "badge-ghost"
-    end
+  attr :searches, :list, required: true
+
+  defp recent_searches_section(assigns) do
+    assigns = assign(assigns, :searches, Enum.take(assigns.searches, 5))
+
+    ~H"""
+    <section class="mb-8">
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">
+          Recent searches
+        </h2>
+        <.link navigate={~p"/search"} class="text-[12px] text-ink-3 hover:text-ink-1">
+          Open search →
+        </.link>
+      </div>
+
+      <ul class="divide-y divide-rule-1 border-y border-rule-1">
+        <%= for s <- @searches do %>
+          <li>
+            <.link
+              navigate={~p"/search?type_id=#{s.type_id}&preset=#{s.preset}"}
+              class="flex items-center gap-3 px-1 py-2.5 hover:bg-surface-2 transition-colors"
+            >
+              <span class="text-ink-3 text-[12px]" aria-hidden="true">▸</span>
+              <span class="flex-1 min-w-0 text-[13px] text-ink-1 truncate">{s.type_name}</span>
+              <span class="text-[11px] text-ink-4 capitalize shrink-0">{s.preset}</span>
+              <span class="text-[11px] text-ink-4 tnum shrink-0 w-12 text-right">
+                {time_ago(s.searched_at)}
+              </span>
+            </.link>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+    """
   end
 
-  defp slot_badge_class(slot_type) do
-    case slot_type do
-      :high -> "badge-error"
-      :med -> "badge-warning"
-      :low -> "badge-success"
-      :rig -> "badge-info"
-      _ -> "badge-ghost"
-    end
+  # ── Signed-out panel ──────────────────────────────────────────────
+
+  defp signed_out_panel(assigns) do
+    ~H"""
+    <section class="panel mb-8">
+      <div class="px-6 py-8 text-center">
+        <p class="text-ink-1 text-[14px]">
+          Sign in to enable watchlists and notifications.
+        </p>
+        <p class="mt-1 text-ink-3 text-[12px]">
+          Anonymous searches still work; saved watchlists require a signed-in pilot.
+        </p>
+        <div class="mt-5">
+          <.link href={~p"/sign-in"} class="btn btn-primary">
+            Sign in with EVE SSO
+          </.link>
+        </div>
+      </div>
+    </section>
+    """
   end
 
-  defp format_isk(nil), do: "N/A"
+  # ── Monitor footer ────────────────────────────────────────────────
 
-  defp format_isk(%Decimal{} = price) do
+  attr :status, :map, required: true
+
+  defp monitor_footer(assigns) do
+    ~H"""
+    <div class="mt-10 pt-4 border-t border-rule-1 flex items-center gap-3">
+      <span class="text-status-error text-[10px] leading-none" aria-hidden="true">!</span>
+      <span class="text-[12px] text-ink-3 flex-1">
+        Monitor paused
+        <%= if @status.last_check do %>
+          <span class="text-ink-4">·</span> last check {time_ago(@status.last_check)}
+        <% end %>
+      </span>
+      <button type="button" class="btn btn-sm" phx-click="resume_monitor">
+        Resume
+      </button>
+    </div>
+    """
+  end
+
+  defp monitor_broken?(%{paused: true}), do: true
+  defp monitor_broken?(_), do: false
+
+  # ── Format ────────────────────────────────────────────────────────
+
+  defp format_score(score) when is_number(score),
+    do: :erlang.float_to_binary(score * 1.0, decimals: 2)
+
+  defp format_score(_), do: "—"
+
+  defp format_price_plain(nil), do: "—"
+
+  defp format_price_plain(%Decimal{} = price) do
     price
     |> Decimal.round(0)
     |> Decimal.to_string()
     |> String.reverse()
     |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
     |> String.reverse()
-    |> Kernel.<>(" ISK")
   end
 
-  defp format_isk(price) when is_number(price) do
-    format_isk(Decimal.new(round(price)))
+  defp format_price_plain(price) when is_number(price),
+    do: format_price_plain(Decimal.new(round(price)))
+
+  defp format_price_plain(_), do: "—"
+
+  defp time_ago(nil), do: "—"
+
+  defp time_ago(%DateTime{} = dt) do
+    seconds = DateTime.diff(DateTime.utc_now(), dt, :second)
+
+    cond do
+      seconds < 60 -> "just now"
+      seconds < 3600 -> "#{div(seconds, 60)}m ago"
+      seconds < 86_400 -> "#{div(seconds, 3600)}h ago"
+      true -> "#{div(seconds, 86_400)}d ago"
+    end
   end
 
-  defp format_isk(_), do: "N/A"
+  defp time_ago(_), do: "—"
 end

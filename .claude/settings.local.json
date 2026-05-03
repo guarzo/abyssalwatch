@@ -35,7 +35,12 @@
       "Bash(sudo apt-get update:*)",
       "Bash(sudo apt-get install:*)",
       "Bash(curl:*)",
-      "Bash(mix test:*)"
+      "Bash(mix test:*)",
+      "Bash(mix precommit *)",
+      "Bash(MIX_ENV=test mix run -e \"IO.inspect\\(Application.get_env\\(:abyssalwatch, Abyssalwatch.Repo\\)[:pool]\\)\" --no-start)",
+      "Bash(MIX_ENV=test mix run -e \"IO.inspect\\(Application.get_env\\(:abyssalwatch, Abyssalwatch.Repo\\)\\)\" --no-start)",
+      "Bash(MIX_ENV=test mix test)",
+      "Bash(env -u MIX_ENV mix precommit)"
     ],
     "deny": [],
     "ask": []

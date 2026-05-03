@@ -750,6 +750,12 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp profile_label("aggressive"), do: "Aggressive"
   defp profile_label(other), do: other |> to_string() |> String.capitalize()
 
+  # Compact label for the segmented sidebar chip (3-col grid).
+  defp profile_label_short("default"), do: "Balanced"
+  defp profile_label_short("conservative"), do: "Safe"
+  defp profile_label_short("aggressive"), do: "Hot"
+  defp profile_label_short(other), do: profile_label(other)
+
   # ── Render ──────────────────────────────────────────────────────────
 
   @impl true
@@ -797,7 +803,7 @@ defmodule AbyssalwatchWeb.SearchLive do
           <% @loading and Enum.empty?(@modules) -> %>
             <.results_skeleton />
           <% is_nil(@selected_type) and Enum.empty?(@modules) -> %>
-            <.empty_initial recent_searches={@recent_searches} />
+            <.empty_initial recent_searches={@recent_searches} module_types={@module_types} />
           <% Enum.empty?(@modules) and Enum.any?(@raw_modules) -> %>
             <.empty_filtered active_filter_count={@active_filter_count} />
           <% Enum.empty?(@modules) -> %>
@@ -840,9 +846,7 @@ defmodule AbyssalwatchWeb.SearchLive do
     ~H"""
     <aside class="panel self-start lg:sticky lg:top-[72px] max-h-[calc(100vh-72px)] overflow-y-auto">
       <div class="panel-header">
-        <h2 class="text-[13px] font-semibold uppercase tracking-wider text-ink-3">
-          Search
-        </h2>
+        <span class="sidebar-kicker">Filters</span>
         <span :if={@active_filter_count > 0} class="text-[11px] text-ink-3 tnum">
           {@active_filter_count} active
         </span>
@@ -868,15 +872,9 @@ defmodule AbyssalwatchWeb.SearchLive do
 
         <div>
           <span class="field-label">Scoring profile</span>
-          <form phx-change="update_criteria" class="grid grid-cols-3 gap-1 mt-1">
+          <form phx-change="update_criteria" class="grid grid-cols-3 gap-1.5 mt-1">
             <%= for profile <- ~w(default conservative aggressive) do %>
-              <label class={[
-                "text-[12px] text-center py-1.5 border rounded-md cursor-pointer transition-colors",
-                if(@criteria_preset == profile,
-                  do: "bg-surface-3 text-ink-1 border-rule-strong",
-                  else: "text-ink-3 border-rule-1 hover:text-ink-1 hover:border-rule-2"
-                )
-              ]}>
+              <label class={["profile-chip", @criteria_preset == profile && "is-active"]}>
                 <input
                   type="radio"
                   name="preset"
@@ -884,11 +882,23 @@ defmodule AbyssalwatchWeb.SearchLive do
                   checked={@criteria_preset == profile}
                   class="sr-only"
                 />
-                {profile_label(profile)}
+                {profile_label_short(profile)}
+                <div class="weight-bars" aria-hidden="true">
+                  <%= for {weight, idx} <- profile_weights(profile) |> Enum.with_index() do %>
+                    <div
+                      class={[
+                        "weight-bars-bar",
+                        @criteria_preset == profile && weight >= 0.4 && "is-strong",
+                        @criteria_preset == profile && weight < 0.4 && "is-active"
+                      ]}
+                      style={"height: #{round(weight * 100)}%"}
+                    />
+                  <% end %>
+                </div>
               </label>
             <% end %>
           </form>
-          <p class="mt-1.5 text-[11px] text-ink-4 leading-snug">
+          <p class="mt-2 text-[11px] text-ink-4 leading-snug">
             {profile_hint(@criteria_preset)}
           </p>
         </div>
@@ -1026,6 +1036,14 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp profile_hint("aggressive"), do: "Heavier weight on damage and range."
   defp profile_hint(_), do: ""
 
+  # Illustrative weight summary for the segmented profile chips: three
+  # bars representing [price, attributes, fit]. Not the exact Criteria
+  # weights — directional, for visual feedback only.
+  defp profile_weights("default"),      do: [0.50, 0.50, 0.50]
+  defp profile_weights("conservative"), do: [0.85, 0.40, 0.55]
+  defp profile_weights("aggressive"),   do: [0.30, 0.85, 0.45]
+  defp profile_weights(_),              do: [0.30, 0.30, 0.30]
+
   # ── Results header ───────────────────────────────────────────────────
 
   attr :selected_type, :any, required: true
@@ -1036,27 +1054,27 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp results_header(assigns) do
     ~H"""
-    <.header>
-      {if @selected_type, do: @selected_type.name, else: "Search"}
-      <:subtitle>
-        <%= cond do %>
-          <% is_nil(@selected_type) -> %>
-            Find and score abyssal modules from live Mutamarket listings.
-          <% Enum.empty?(@raw_modules) and not @loading -> %>
-            No fetch yet. Pick a type and search.
-          <% true -> %>
-            <span class="tnum">{length(@modules)}</span>
-            <%= if length(@modules) != length(@raw_modules) do %>
-              of <span class="tnum">{length(@raw_modules)}</span> results
-            <% else %>
-              results
-            <% end %>
-            <span :if={@fetched_at} class={["ml-1", stale?(@fetched_at) && "text-status-training"]}>
-              · {time_ago(@fetched_at)}
-            </span>
-        <% end %>
-      </:subtitle>
-    </.header>
+    <%= if @selected_type do %>
+      <.header>
+        {@selected_type.name}
+        <:subtitle>
+          <%= cond do %>
+            <% Enum.empty?(@raw_modules) and not @loading -> %>
+              No fetch yet. Pick a type and search.
+            <% true -> %>
+              <span class="tnum">{length(@modules)}</span>
+              <%= if length(@modules) != length(@raw_modules) do %>
+                of <span class="tnum">{length(@raw_modules)}</span> results
+              <% else %>
+                results
+              <% end %>
+              <span :if={@fetched_at} class={["ml-1", stale?(@fetched_at) && "text-status-training"]}>
+                · {time_ago(@fetched_at)}
+              </span>
+          <% end %>
+        </:subtitle>
+      </.header>
+    <% end %>
     """
   end
 
@@ -1086,46 +1104,147 @@ defmodule AbyssalwatchWeb.SearchLive do
   end
 
   attr :recent_searches, :list, required: true
+  attr :module_types, :list, default: []
 
   defp empty_initial(assigns) do
-    ~H"""
-    <div class="panel">
-      <div class="px-6 py-12 text-center">
-        <p class="text-ink-1 text-[15px]">Pick a module type to begin.</p>
-        <p class="text-ink-3 text-[13px] mt-1">
-          Choose a type in the sidebar, then search Mutamarket for live listings.
-        </p>
-      </div>
+    quick = Enum.take(assigns.module_types, 4)
+    assigns = assign(assigns, :quick_hunts, quick)
 
-      <%= if Enum.any?(@recent_searches) do %>
-        <div class="border-t border-rule-1 px-2 py-2">
-          <div class="px-4 py-2 text-[11px] uppercase tracking-wider text-ink-3 font-medium">
-            Recent
-          </div>
-          <ul>
-            <%= for s <- Enum.take(@recent_searches, 5) do %>
-              <li>
-                <button
-                  type="button"
-                  phx-click="load_recent"
-                  phx-value-type_id={s.type_id}
-                  class="w-full flex items-center justify-between gap-4 px-4 py-2.5 text-left hover:bg-surface-2 rounded-md transition-colors"
-                >
-                  <span class="flex items-center gap-2 min-w-0">
-                    <span class="text-ink-3 text-[12px]" aria-hidden="true">▸</span>
-                    <span class="text-ink-1 text-sm truncate">{s.type_name}</span>
-                    <span class="text-ink-4 text-[11px]">· {profile_label(s.preset)}</span>
-                  </span>
-                  <span class="text-ink-4 text-[11px] tnum shrink-0">
-                    {time_ago(s.searched_at)}
-                  </span>
-                </button>
-              </li>
-            <% end %>
-          </ul>
+    ~H"""
+    <section class="hero">
+      <%!-- Decorative attribute-radar art. Behind the headline, far right.
+            Five-axis polygon stack at low opacity — visual signature, not chrome. --%>
+      <svg class="hero-art" viewBox="-160 -160 320 320" aria-hidden="true">
+        <defs>
+          <radialGradient id="hero-art-fill" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="oklch(0.72 0.13 280)" stop-opacity="0.35" />
+            <stop offset="100%" stop-color="oklch(0.72 0.13 280)" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <%!-- Concentric pentagons (radar grid) --%>
+        <%= for r <- [40, 80, 120, 150] do %>
+          <polygon
+            points={radar_grid_points(r)}
+            fill="none"
+            stroke="oklch(0.46 0.007 250)"
+            stroke-width="0.5"
+            opacity="0.6"
+          />
+        <% end %>
+        <%!-- Axis lines --%>
+        <%= for {x, y} <- radar_axes() do %>
+          <line x1="0" y1="0" x2={x} y2={y}
+            stroke="oklch(0.38 0.006 250)" stroke-width="0.5" />
+        <% end %>
+        <%!-- A representative "great roll" polygon, indigo-filled --%>
+        <polygon
+          points={radar_data_points([0.94, 0.78, 0.88, 0.62, 0.91])}
+          fill="url(#hero-art-fill)"
+          stroke="oklch(0.80 0.14 280)"
+          stroke-width="1.25"
+          opacity="0.85"
+        />
+        <%!-- Vertex dots --%>
+        <%= for {x, y} <- radar_vertex_dots([0.94, 0.78, 0.88, 0.62, 0.91]) do %>
+          <circle cx={x} cy={y} r="2.25" fill="oklch(0.80 0.14 280)" />
+        <% end %>
+        <%!-- A weaker, amber comparison polygon — represents median --%>
+        <polygon
+          points={radar_data_points([0.55, 0.50, 0.58, 0.45, 0.52])}
+          fill="none"
+          stroke="oklch(0.82 0.16 70)"
+          stroke-width="0.75"
+          stroke-dasharray="2 3"
+          opacity="0.55"
+        />
+      </svg>
+
+      <div class="hero-kicker">Mutamarket · Live</div>
+
+      <h1 class="text-mono-display hero-headline">
+        Hunt the abyss<span class="text-mono-display-tail">.</span>
+      </h1>
+
+      <p class="hero-sub">
+        Score every mutaplasmid roll on the market against your fitting profile.
+        Pick a module type and start fishing — the radar shows you why a number is what it is.
+      </p>
+
+      <%= if Enum.any?(@quick_hunts) do %>
+        <div class="quick-hunts">
+          <span class="quick-hunts-label">Quick start</span>
+          <%= for t <- @quick_hunts do %>
+            <button
+              type="button"
+              phx-click="select_type"
+              phx-value-type_id={t.eve_type_id}
+              class="quick-hunt"
+              title={"Search " <> t.name}
+            >
+              <span class="quick-hunt-glyph" aria-hidden="true">▸</span>
+              <span>{t.name}</span>
+            </button>
+          <% end %>
         </div>
       <% end %>
-    </div>
+    </section>
+
+    <section class="how-strip" aria-label="How AbyssalWatch works">
+      <div class="how-step">
+        <div class="how-step-num">01</div>
+        <h3 class="how-step-title">Pick a hull profile</h3>
+        <p class="how-step-body">
+          Default, Conservative, or Aggressive scoring weights — or tune the criteria
+          by attribute for the fit you're actually flying.
+        </p>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">02</div>
+        <h3 class="how-step-title">Score the market</h3>
+        <p class="how-step-body">
+          We pull live Mutamarket listings and run TOPSIS against your weights.
+          Every roll gets a number you can compare.
+        </p>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">03</div>
+        <h3 class="how-step-title">Watch for deals</h3>
+        <p class="how-step-body">
+          Save a watchlist and we'll ping Discord when a roll above your threshold
+          shows up below median price.
+        </p>
+      </div>
+    </section>
+
+    <%= if Enum.any?(@recent_searches) do %>
+      <section class="panel mt-6">
+        <header class="panel-header">
+          <h2 class="text-meta">Recent</h2>
+          <span class="text-micro">{length(@recent_searches)} hunts</span>
+        </header>
+        <ul>
+          <%= for s <- Enum.take(@recent_searches, 5) do %>
+            <li>
+              <button
+                type="button"
+                phx-click="load_recent"
+                phx-value-type_id={s.type_id}
+                class="w-full flex items-center justify-between gap-4 px-4 py-2.5 text-left hover:bg-surface-2 transition-colors first:rounded-t-[10px] last:rounded-b-[10px]"
+              >
+                <span class="flex items-center gap-2 min-w-0">
+                  <span class="text-ink-3 text-[12px]" aria-hidden="true">▸</span>
+                  <span class="text-ink-1 text-sm truncate">{s.type_name}</span>
+                  <span class="text-ink-4 text-[11px]">· {profile_label(s.preset)}</span>
+                </span>
+                <span class="text-ink-4 text-[11px] tnum shrink-0">
+                  {time_ago(s.searched_at)}
+                </span>
+              </button>
+            </li>
+          <% end %>
+        </ul>
+      </section>
+    <% end %>
     """
   end
 
@@ -1523,4 +1642,46 @@ defmodule AbyssalwatchWeb.SearchLive do
   end
 
   defp format_attribute_value(value), do: to_string(value)
+
+  # ── Hero radar geometry ────────────────────────────────────────────
+  # Five-axis radar plotted on a 320×320 viewBox centered at (0,0).
+  # Axis 0 is up (-y), then clockwise. Used by the empty-state hero art.
+
+  @radar_axes_count 5
+  @radar_max_radius 150
+
+  defp radar_grid_points(radius) do
+    values = for _ <- 1..@radar_axes_count, do: 1.0
+    radar_polygon_points(values, radius: radius)
+  end
+
+  defp radar_data_points(values) when is_list(values) do
+    radar_polygon_points(values, radius: @radar_max_radius)
+  end
+
+  defp radar_polygon_points(values, opts) do
+    radius = Keyword.fetch!(opts, :radius)
+
+    values
+    |> radar_coords(radius)
+    |> Enum.map_join(" ", fn {x, y} -> "#{x},#{y}" end)
+  end
+
+  defp radar_axes do
+    radar_coords(List.duplicate(1.0, @radar_axes_count), @radar_max_radius)
+  end
+
+  defp radar_vertex_dots(values), do: radar_coords(values, @radar_max_radius)
+
+  defp radar_coords(values, radius) do
+    values
+    |> Enum.with_index()
+    |> Enum.map(fn {v, i} ->
+      angle = -:math.pi() / 2 + i * (2 * :math.pi() / @radar_axes_count)
+      r = v * radius
+      x = r * :math.cos(angle)
+      y = r * :math.sin(angle)
+      {Float.round(x, 2), Float.round(y, 2)}
+    end)
+  end
 end

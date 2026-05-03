@@ -43,6 +43,12 @@
   --accent-soft: oklch(0.72 0.13 280 / 0.18);
   --accent-ink: oklch(0.18 0.01 280);
 
+  /* Signal — warm amber, hue 70. Functional, used ONLY for deal alerts
+     (price below median). Never decorative. */
+  --signal:      oklch(0.82 0.16 70);
+  --signal-soft: oklch(0.82 0.16 70 / 0.18);
+  --signal-ink:  oklch(0.20 0.04 70);
+
   /* Status — functional, never decorative */
   --status-ready:    oklch(0.78 0.13 145);
   --status-training: oklch(0.85 0.13  95);
@@ -100,6 +106,10 @@
   --color-status-queued: var(--status-queued);
   --color-status-idle: var(--status-idle);
   --color-status-error: var(--status-error);
+
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-signal-ink: var(--signal-ink);
 
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -182,6 +192,39 @@
   .text-h2      { font-size: 22px; line-height: 30px; font-weight: 600; letter-spacing: -0.008em; color: var(--ink-1); }
   .text-h3      { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: -0.005em; color: var(--ink-1); }
   .text-body    { font-size: 14px; line-height: 20px; font-weight: 400; color: var(--ink-2); }
+
+  /* Mono display — terminal-leaning page titles. Surgical use only:
+     reserved for the H1 of marquee surfaces (Search hero, Optimize hero).
+     Never for body, captions, or repeat headings. */
+  .text-mono-display {
+    font-family: var(--font-mono);
+    font-size: 44px;
+    line-height: 1.05;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    color: var(--ink-1);
+  }
+  @media (min-width: 768px) {
+    .text-mono-display { font-size: 56px; }
+  }
+  .text-mono-display .text-mono-display-tail {
+    color: var(--accent-strong);
+    font-weight: 600;
+    margin-left: -0.05em;
+  }
+  /* Inline blinking caret following the mono display, suggesting "ready
+     to type." One-shot fade on mount, then steady. */
+  .text-mono-display::after {
+    content: "▍";
+    color: var(--accent);
+    margin-left: -0.04em;
+    font-weight: 400;
+    animation: caret-blink 1.4s steps(2, end) infinite;
+  }
+  @keyframes caret-blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+  }
   .text-meta {
     font-size: 12px;
     line-height: 16px;
@@ -590,6 +633,260 @@
     .app-main {
       padding: 24px;
     }
+  }
+
+  /* ─── Search hero ──────────────────────────────────────────────────
+     The marquee empty state. Replaces a centered "Pick a type" panel
+     with an editorial canvas: oversized mono headline + decorative
+     attribute-radar art behind, kicker label, quick-hunt chips below.
+     This is the visual signature of the app — used once. */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--rule-1);
+    border-radius: var(--radius-lg);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, oklch(0.72 0.13 280 / 0.10), transparent 60%),
+      radial-gradient(800px 400px at -10% 110%, oklch(0.82 0.16 70 / 0.06), transparent 55%),
+      var(--surface-1);
+    padding: 40px 24px 32px;
+  }
+  @media (min-width: 768px) {
+    .hero { padding: 64px 48px 56px; }
+  }
+  .hero-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 20px;
+  }
+  .hero-kicker::before {
+    content: "";
+    width: 24px;
+    height: 1px;
+    background: var(--accent);
+  }
+  .hero-headline {
+    position: relative;
+    z-index: 2;
+    max-width: 18ch;
+  }
+  .hero-sub {
+    position: relative;
+    z-index: 2;
+    margin-top: 16px;
+    max-width: 52ch;
+    color: var(--ink-2);
+    font-size: 15px;
+    line-height: 24px;
+  }
+  /* Decorative radar/spider visual sits behind the headline, far right */
+  .hero-art {
+    position: absolute;
+    top: 50%;
+    right: 4%;
+    transform: translateY(-50%);
+    width: 460px;
+    height: 460px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.55;
+    mix-blend-mode: screen;
+  }
+  @media (max-width: 1023px) {
+    .hero-art {
+      right: -30%;
+      width: 380px;
+      height: 380px;
+      opacity: 0.35;
+    }
+  }
+  @media (max-width: 640px) {
+    .hero-art { display: none; }
+  }
+
+  /* Quick-hunt chips — turn the empty state into an activation surface.
+     Used below the hero headline as one-tap shortcuts to popular module
+     types. Sits on top of the hero canvas. */
+  .quick-hunts {
+    position: relative;
+    z-index: 2;
+    margin-top: 32px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .quick-hunts-label {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-4);
+    margin-bottom: 4px;
+  }
+  .quick-hunt {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px 8px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1;
+    color: var(--ink-1);
+    background: oklch(0.18 0.005 250 / 0.6);
+    border: 1px solid var(--rule-1);
+    border-radius: 999px;
+    cursor: pointer;
+    backdrop-filter: blur(6px);
+    transition: border-color var(--motion-duration-fast) var(--motion-ease),
+                background var(--motion-duration-fast) var(--motion-ease),
+                transform var(--motion-duration-fast) var(--motion-ease);
+  }
+  .quick-hunt:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: translateY(-1px);
+  }
+  .quick-hunt-glyph {
+    color: var(--accent);
+    font-size: 10px;
+  }
+
+  /* Signal pill — amber. ONLY for "deal" / below-median pricing. Used in
+     results rows and detail. Never decorative. */
+  .pill-signal {
+    color: var(--signal);
+    border-color: oklch(0.82 0.16 70 / 0.4);
+    background: var(--signal-soft);
+  }
+  .pill-signal .pill-glyph { color: var(--signal); }
+
+  /* Once-on-mount draw across a section break. Subtle, single-shot. */
+  @keyframes line-draw {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+  .section-rule-draw {
+    transform-origin: left center;
+    animation: line-draw 600ms var(--motion-ease) 1 both;
+  }
+
+  /* ─── Filter sidebar character ─────────────────────────────────────
+     The sidebar that flanks the Search hero. Gets a mono label header
+     so it doesn't read like a 1990s form. */
+  .sidebar-kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .sidebar-kicker::before {
+    content: "";
+    width: 18px;
+    height: 1px;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* Profile weight bars — three bars beneath each scoring profile chip
+     showing relative weights (price / attrs / fit). Visual feedback so
+     the choice isn't abstract. */
+  .weight-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 16px;
+    margin-top: 6px;
+  }
+  .weight-bars-bar {
+    flex: 1;
+    background: var(--rule-1);
+    border-radius: 1px;
+    transition: background var(--motion-duration-base) var(--motion-ease),
+                height var(--motion-duration-base) var(--motion-ease);
+  }
+  .weight-bars-bar.is-active { background: var(--accent); }
+  .weight-bars-bar.is-strong { background: var(--accent-strong); }
+
+  /* Profile chip */
+  .profile-chip {
+    position: relative;
+    padding: 8px 4px 6px;
+    text-align: center;
+    border: 1px solid var(--rule-1);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: border-color var(--motion-duration-fast) var(--motion-ease),
+                background var(--motion-duration-fast) var(--motion-ease),
+                color var(--motion-duration-fast) var(--motion-ease);
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .profile-chip:hover {
+    color: var(--ink-1);
+    border-color: var(--rule-2);
+  }
+  .profile-chip.is-active {
+    color: var(--ink-1);
+    background: var(--surface-2);
+    border-color: var(--accent);
+  }
+
+  /* Editorial three-step explainer beneath the hero. Numbered, mono labels, generous spacing. */
+  .how-strip {
+    margin-top: 56px;
+    padding-top: 32px;
+    border-top: 1px solid var(--rule-1);
+    display: grid;
+    gap: 32px;
+  }
+  @media (min-width: 768px) {
+    .how-strip { grid-template-columns: repeat(3, 1fr); gap: 48px; }
+  }
+  .how-step {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px 16px;
+    align-items: start;
+  }
+  .how-step-num {
+    grid-row: span 2;
+    font-family: var(--font-mono);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 500;
+    color: var(--accent);
+    min-width: 32px;
+  }
+  .how-step-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink-1);
+    line-height: 1.3;
+  }
+  .how-step-body {
+    grid-column: 2;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink-3);
   }
 }
 

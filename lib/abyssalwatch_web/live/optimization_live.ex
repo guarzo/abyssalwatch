@@ -1,13 +1,14 @@
 defmodule AbyssalwatchWeb.OptimizationLive do
   @moduledoc """
-  LiveView for the ship fitting optimization wizard.
+  Single-page abyssal-module optimizer.
 
-  Provides a multi-step workflow:
-  1. Import - Load fitting via EFT paste or file upload
-  2. Constraints - Configure CPU, power grid, calibration limits
-  3. Objectives - Set module selection criteria and scoring weights
-  4. Optimize - Run the solver and display progress
-  5. Results - Review and export solutions
+  The pilot pastes an EFT (or drops the file in), the surface auto-derives
+  the included module types from the fit, and the sidebar tunes constraints,
+  objectives, and solver mode. Optimize fills the slots; the solutions table
+  ranks results, and the selected detail panel shows the slot-by-slot
+  assignment with a Δ score against the pilot's current modules.
+
+  See DESIGN.md and PRODUCT.md for the visual language.
   """
 
   use AbyssalwatchWeb, :live_view
@@ -19,30 +20,30 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   alias Abyssalwatch.Market.Scoring.{Topsis, Criteria}
   alias Abyssalwatch.Market.Mutamarket.Client, as: MutamarketClient
 
-  @steps [:import, :constraints, :objectives, :optimize, :results]
-
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(:step, :import)
-     |> assign(:steps, @steps)
      |> assign(:fitting, nil)
+     |> assign(:eft_input, "")
+     |> assign(:eft_error, nil)
      |> assign(:constraints, default_constraints())
      |> assign(:criteria, Criteria.default())
      |> assign(:solver_mode, :heuristic)
-     |> assign(:selected_types, [])
      |> assign(:module_types, load_module_types())
+     |> assign(:included_type_ids, [])
+     |> assign(:types_popover_open, false)
+     |> assign(:type_filter, "")
      |> assign(:candidates, [])
-     |> assign(:solutions, [])
-     |> assign(:selected_solution, nil)
-     |> assign(:optimizing, false)
-     |> assign(:optimization_error, nil)
-     |> assign(:eft_input, "")
      |> assign(:loading_modules, false)
+     |> assign(:optimizing, false)
      |> assign(:optimization_start_time, nil)
      |> assign(:optimization_elapsed, 0)
-     |> assign(:optimization_status, "")
+     |> assign(:optimization_error, nil)
+     |> assign(:solutions, [])
+     |> assign(:selected_solution, nil)
+     |> assign(:copy_state, :idle)
+     |> assign(:confirming_clear, false)
      |> allow_upload(:eft_file,
        accept: ~w(.txt .eft),
        max_entries: 1,
@@ -50,18 +51,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
      )}
   end
 
-  @impl true
-  def handle_event("set_step", %{"step" => step}, socket) do
-    step_atom = String.to_existing_atom(step)
-
-    if step_atom in @steps do
-      {:noreply, assign(socket, :step, step_atom)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  # Step 1: Import
+  # ── Import ─────────────────────────────────────────────────────────
 
   @impl true
   def handle_event("update_eft_input", %{"eft" => eft_text}, socket) do
@@ -70,79 +60,62 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   @impl true
   def handle_event("parse_eft", _params, socket) do
-    case EFT.parse(socket.assigns.eft_input) do
-      {:ok, fitting} ->
-        {:noreply,
-         socket
-         |> assign(:fitting, fitting)
-         |> assign(:step, :constraints)
-         |> put_flash(:info, "Fitting imported: #{fitting.name}")}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Parse error: #{reason}")}
-    end
+    parse_and_load(socket, socket.assigns.eft_input)
   end
 
   @impl true
-  def handle_event("validate_upload", _params, socket) do
-    {:noreply, socket}
-  end
+  def handle_event("validate_upload", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("upload_eft", _params, socket) do
-    uploaded_content =
+    contents =
       consume_uploaded_entries(socket, :eft_file, fn %{path: path}, _entry ->
-        content = File.read!(path)
-        {:ok, content}
+        {:ok, File.read!(path)}
       end)
 
-    case uploaded_content do
-      [content] ->
-        case EFT.parse(content) do
-          {:ok, fitting} ->
-            {:noreply,
-             socket
-             |> assign(:fitting, fitting)
-             |> assign(:eft_input, content)
-             |> assign(:step, :constraints)
-             |> put_flash(:info, "Fitting imported from file: #{fitting.name}")}
-
-          {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Parse error: #{reason}")}
-        end
-
-      [] ->
-        {:noreply, put_flash(socket, :error, "No file selected")}
+    case contents do
+      [eft_text | _] -> parse_and_load(socket, eft_text)
+      _ -> {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_event("cancel_upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :eft_file, ref)}
   end
 
   @impl true
   def handle_event("clear_fitting", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:fitting, nil)
-     |> assign(:eft_input, "")
-     |> assign(:step, :import)}
+    if Enum.any?(socket.assigns.solutions) and not socket.assigns.confirming_clear do
+      {:noreply, assign(socket, :confirming_clear, true)}
+    else
+      {:noreply, reset_to_empty(socket)}
+    end
   end
 
   @impl true
-  def handle_event("cancel-upload", %{"ref" => ref}, socket) do
-    {:noreply, cancel_upload(socket, :eft_file, ref)}
+  def handle_event("cancel_clear", _params, socket) do
+    {:noreply, assign(socket, :confirming_clear, false)}
   end
 
-  # Step 2: Constraints
+  # ── Tune ───────────────────────────────────────────────────────────
 
   @impl true
   def handle_event("update_constraints", params, socket) do
     constraints = %Constraints{
-      cpu_capacity: parse_float(params["cpu_capacity"], 0.0),
-      power_capacity: parse_float(params["power_capacity"], 0.0),
-      calibration_capacity: parse_float(params["calibration_capacity"], 400.0),
+      cpu_capacity: parse_float(params["cpu_capacity"], socket.assigns.constraints.cpu_capacity),
+      power_capacity:
+        parse_float(params["power_capacity"], socket.assigns.constraints.power_capacity),
+      calibration_capacity:
+        parse_float(
+          params["calibration_capacity"],
+          socket.assigns.constraints.calibration_capacity
+        ),
       available_slots: %{
-        high: parse_int(params["high_slots"], 0),
-        med: parse_int(params["med_slots"], 0),
-        low: parse_int(params["low_slots"], 0),
-        rig: parse_int(params["rig_slots"], 3)
+        high: parse_int(params["high_slots"], socket.assigns.constraints.available_slots.high),
+        med: parse_int(params["med_slots"], socket.assigns.constraints.available_slots.med),
+        low: parse_int(params["low_slots"], socket.assigns.constraints.available_slots.low),
+        rig: parse_int(params["rig_slots"], socket.assigns.constraints.available_slots.rig)
       },
       max_price: parse_decimal(params["max_price"])
     }
@@ -151,159 +124,150 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   end
 
   @impl true
-  def handle_event("next_from_constraints", _params, socket) do
-    case Constraints.validate(socket.assigns.constraints) do
-      :ok ->
-        {:noreply, assign(socket, :step, :objectives)}
-
-      {:error, reason} ->
-        {:noreply, put_flash(socket, :error, reason)}
-    end
-  end
-
-  # Step 3: Objectives
-
-  @impl true
-  def handle_event("toggle_module_type", %{"type_id" => type_id_str}, socket) do
-    type_id = String.to_integer(type_id_str)
-    selected = socket.assigns.selected_types
-
-    new_selected =
-      if type_id in selected do
-        List.delete(selected, type_id)
-      else
-        [type_id | selected]
-      end
-
-    {:noreply, assign(socket, :selected_types, new_selected)}
+  def handle_event("update_objective", %{"key" => key, "value" => raw}, socket) do
+    weight = parse_float(raw, 0.5)
+    criteria = put_criteria_weight(socket.assigns.criteria, key, weight)
+    {:noreply, assign(socket, :criteria, criteria)}
   end
 
   @impl true
   def handle_event("update_solver_mode", %{"mode" => mode}, socket) do
-    mode_atom =
-      case mode do
-        "heuristic" -> :heuristic
-        "constraint" -> :constraint
-        _ -> :heuristic
-      end
+    {:noreply, assign(socket, :solver_mode, normalize_solver(mode))}
+  end
 
-    {:noreply, assign(socket, :solver_mode, mode_atom)}
+  # ── Module-types popover ──────────────────────────────────────────
+
+  @impl true
+  def handle_event("toggle_types_popover", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:types_popover_open, not socket.assigns.types_popover_open)
+     |> assign(:type_filter, "")}
   end
 
   @impl true
-  def handle_event("fetch_candidates", _params, socket) do
-    if Enum.empty?(socket.assigns.selected_types) do
-      {:noreply, put_flash(socket, :error, "Please select at least one module type")}
-    else
-      socket = assign(socket, :loading_modules, true)
-      send(self(), :load_candidates)
-      {:noreply, socket}
+  def handle_event("close_types_popover", _params, socket) do
+    {:noreply, assign(socket, :types_popover_open, false)}
+  end
+
+  @impl true
+  def handle_event("filter_types", %{"q" => q}, socket) do
+    {:noreply, assign(socket, :type_filter, q)}
+  end
+
+  @impl true
+  def handle_event("toggle_module_type", %{"type_id" => raw}, socket) do
+    type_id = String.to_integer(raw)
+    included = socket.assigns.included_type_ids
+
+    next =
+      if type_id in included, do: List.delete(included, type_id), else: [type_id | included]
+
+    {:noreply, assign(socket, :included_type_ids, next)}
+  end
+
+  @impl true
+  def handle_event("reset_types_to_fit", _params, socket) do
+    {:noreply, assign(socket, :included_type_ids, derive_types_from_fit(socket.assigns))}
+  end
+
+  # ── Run ────────────────────────────────────────────────────────────
+
+  @impl true
+  def handle_event("optimize", _params, socket) do
+    cond do
+      is_nil(socket.assigns.fitting) ->
+        {:noreply, socket}
+
+      Enum.empty?(socket.assigns.included_type_ids) ->
+        {:noreply, put_flash(socket, :error, "Include at least one module type to optimize")}
+
+      true ->
+        socket =
+          socket
+          |> assign(:loading_modules, true)
+          |> assign(:optimizing, true)
+          |> assign(:optimization_error, nil)
+          |> assign(:optimization_start_time, System.monotonic_time(:millisecond))
+          |> assign(:optimization_elapsed, 0)
+
+        :timer.send_interval(120, self(), :optimization_tick)
+        send(self(), :load_candidates)
+        {:noreply, socket}
     end
   end
 
-  # Step 4: Optimize
-
   @impl true
-  def handle_event("run_optimization", _params, socket) do
-    if Enum.empty?(socket.assigns.candidates) do
-      {:noreply, put_flash(socket, :error, "No module candidates loaded")}
-    else
-      # Start timer for progress updates
-      :timer.send_interval(100, self(), :optimization_tick)
-
-      socket =
-        socket
-        |> assign(:optimizing, true)
-        |> assign(:optimization_start_time, System.monotonic_time(:millisecond))
-        |> assign(:optimization_elapsed, 0)
-        |> assign(:optimization_status, "Initializing solver...")
-
-      send(self(), :run_optimization)
-      {:noreply, socket}
-    end
-  end
-
-  # Step 5: Results
-
-  @impl true
-  def handle_event("select_solution", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    solution = Enum.at(socket.assigns.solutions, index)
-    {:noreply, assign(socket, :selected_solution, solution)}
+  def handle_event("cancel_optimize", _params, socket) do
+    # UI-side cancel: hide running state. The underlying solver continues
+    # but its result is discarded by ignoring late :optimization_done sends.
+    {:noreply,
+     socket
+     |> assign(:loading_modules, false)
+     |> assign(:optimizing, false)
+     |> assign(:optimization_elapsed, 0)}
   end
 
   @impl true
-  def handle_event("export_eft", _params, socket) do
-    case socket.assigns.selected_solution do
-      nil ->
-        {:noreply, put_flash(socket, :error, "No solution selected")}
-
-      solution ->
-        ship_name = socket.assigns.fitting.ship_type
-        fit_name = "#{socket.assigns.fitting.name} (Optimized)"
-        eft = Optimization.export_to_eft(solution, ship_name, fit_name)
-        {:noreply, push_event(socket, "copy_to_clipboard", %{text: eft})}
-    end
+  def handle_event("select_solution", %{"index" => raw}, socket) do
+    index = String.to_integer(raw)
+    {:noreply, assign(socket, :selected_solution, Enum.at(socket.assigns.solutions, index))}
   end
+
+  # ── Export ─────────────────────────────────────────────────────────
 
   @impl true
-  def handle_event("export_json", _params, socket) do
-    case socket.assigns.selected_solution do
-      nil ->
-        {:noreply, put_flash(socket, :error, "No solution selected")}
-
-      solution ->
-        json_data = Optimization.export_to_json(solution)
-        json_string = Jason.encode!(json_data, pretty: true)
-        {:noreply, push_event(socket, "copy_to_clipboard", %{text: json_string})}
-    end
-  end
+  def handle_event("export_eft", _params, socket), do: do_export_text(socket, :eft)
+  def handle_event("export_json", _params, socket), do: do_export_text(socket, :json)
 
   @impl true
   def handle_event("export_all_json", _params, socket) do
-    if Enum.empty?(socket.assigns.solutions) do
-      {:noreply, put_flash(socket, :error, "No solutions to export")}
-    else
-      ship_name = socket.assigns.fitting.ship_type
-      fit_name = "#{socket.assigns.fitting.name} (Optimized)"
+    case socket.assigns do
+      %{solutions: []} ->
+        {:noreply, socket}
 
-      json_data =
-        Optimization.export_solutions_to_json(
-          socket.assigns.solutions,
-          ship_name,
-          fit_name
-        )
+      %{fitting: nil} ->
+        {:noreply, socket}
 
-      json_string = Jason.encode!(json_data, pretty: true)
+      assigns ->
+        ship = assigns.fitting.ship_type
+        name = "#{assigns.fitting.name} (Optimized)"
+        json = Optimization.export_solutions_to_json(assigns.solutions, ship, name)
+        json_string = Jason.encode!(json, pretty: true)
 
-      {:noreply,
-       push_event(socket, "download_file", %{
-         content: json_string,
-         filename: "#{fit_name}.json",
-         type: "application/json"
-       })}
+        {:noreply,
+         push_event(socket, "download_file", %{
+           content: json_string,
+           filename: "#{name}.json",
+           type: "application/json"
+         })}
     end
   end
 
-  @impl true
-  def handle_event("start_over", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:step, :import)
-     |> assign(:fitting, nil)
-     |> assign(:eft_input, "")
-     |> assign(:candidates, [])
-     |> assign(:solutions, [])
-     |> assign(:selected_solution, nil)
-     |> assign(:selected_types, [])}
-  end
+  # ── Keyboard ──────────────────────────────────────────────────────
 
-  # Async handlers
+  @impl true
+  def handle_event("keydown", %{"key" => key, "ctrlKey" => ctrl, "metaKey" => meta}, socket) do
+    cond do
+      key == "Escape" and socket.assigns.types_popover_open ->
+        {:noreply, assign(socket, :types_popover_open, false)}
+
+      key == "Escape" and socket.assigns.confirming_clear ->
+        {:noreply, assign(socket, :confirming_clear, false)}
+
+      key == "Enter" and (ctrl or meta) and socket.assigns.fitting and
+          not socket.assigns.optimizing ->
+        handle_event("optimize", %{}, socket)
+
+      true ->
+        {:noreply, socket}
+    end
+  end
 
   @impl true
   def handle_info(:load_candidates, socket) do
     candidates =
-      socket.assigns.selected_types
+      socket.assigns.included_type_ids
       |> Enum.flat_map(fn type_id ->
         type = Enum.find(socket.assigns.module_types, &(&1.eve_type_id == type_id))
         slot_type = get_slot_type(type)
@@ -319,45 +283,37 @@ defmodule AbyssalwatchWeb.OptimizationLive do
         end
       end)
 
-    {:noreply,
-     socket
-     |> assign(:candidates, candidates)
-     |> assign(:loading_modules, false)
-     |> assign(:step, :optimize)
-     |> put_flash(:info, "Loaded #{length(candidates)} candidate modules")}
+    socket = assign(socket, :candidates, candidates) |> assign(:loading_modules, false)
+    send(self(), :run_optimization)
+    {:noreply, socket}
   end
 
   @impl true
   def handle_info(:run_optimization, socket) do
-    # Update status
-    socket =
-      assign(socket, :optimization_status, "Running #{socket.assigns.solver_mode} solver...")
-
-    result =
-      Optimization.optimize(
-        socket.assigns.candidates,
-        socket.assigns.constraints,
-        mode: socket.assigns.solver_mode
-      )
-
-    case result do
-      {:ok, %{solutions: solutions, solve_time_ms: solve_time}} ->
-        {:noreply,
-         socket
-         |> assign(:solutions, solutions)
-         |> assign(:selected_solution, List.first(solutions))
-         |> assign(:optimizing, false)
-         |> assign(:optimization_status, "")
-         |> assign(:step, :results)
-         |> put_flash(:info, "Found #{length(solutions)} solutions in #{solve_time}ms")}
+    case Optimization.optimize(
+           socket.assigns.candidates,
+           socket.assigns.constraints,
+           mode: socket.assigns.solver_mode
+         ) do
+      {:ok, %{solutions: solutions}} ->
+        if socket.assigns.optimizing do
+          {:noreply,
+           socket
+           |> assign(:solutions, solutions)
+           |> assign(:selected_solution, List.first(solutions))
+           |> assign(:optimizing, false)
+           |> assign(:optimization_elapsed, 0)}
+        else
+          # Cancelled UI-side; discard.
+          {:noreply, socket}
+        end
 
       {:error, reason} ->
         {:noreply,
          socket
-         |> assign(:optimization_error, reason)
+         |> assign(:optimization_error, format_solver_error(reason))
          |> assign(:optimizing, false)
-         |> assign(:optimization_status, "")
-         |> put_flash(:error, "Optimization failed: #{reason}")}
+         |> assign(:optimization_elapsed, 0)}
     end
   end
 
@@ -365,26 +321,81 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   def handle_info(:optimization_tick, socket) do
     if socket.assigns.optimizing do
       elapsed = System.monotonic_time(:millisecond) - socket.assigns.optimization_start_time
-
-      status =
-        cond do
-          elapsed < 500 -> "Initializing solver..."
-          elapsed < 2000 -> "Exploring solution space..."
-          elapsed < 5000 -> "Evaluating candidates..."
-          elapsed < 10000 -> "Finding optimal configurations..."
-          true -> "Deep search in progress..."
-        end
-
-      {:noreply,
-       socket
-       |> assign(:optimization_elapsed, elapsed)
-       |> assign(:optimization_status, status)}
+      {:noreply, assign(socket, :optimization_elapsed, elapsed)}
     else
       {:noreply, socket}
     end
   end
 
-  # Helpers
+  @impl true
+  def handle_info(:clear_copy_state, socket) do
+    {:noreply, assign(socket, :copy_state, :idle)}
+  end
+
+  # ── Internal helpers ──────────────────────────────────────────────
+
+  defp parse_and_load(socket, eft_text) do
+    case EFT.parse(eft_text) do
+      {:ok, fitting} ->
+        socket =
+          socket
+          |> assign(:fitting, fitting)
+          |> assign(:eft_input, eft_text)
+          |> assign(:eft_error, nil)
+          |> assign(:solutions, [])
+          |> assign(:selected_solution, nil)
+          |> assign(:optimization_error, nil)
+          |> assign(:confirming_clear, false)
+
+        included = derive_types_from_fit(socket.assigns)
+        {:noreply, assign(socket, :included_type_ids, included)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :eft_error, to_string(reason))}
+    end
+  end
+
+  defp reset_to_empty(socket) do
+    socket
+    |> assign(:fitting, nil)
+    |> assign(:eft_input, "")
+    |> assign(:eft_error, nil)
+    |> assign(:included_type_ids, [])
+    |> assign(:candidates, [])
+    |> assign(:solutions, [])
+    |> assign(:selected_solution, nil)
+    |> assign(:optimization_error, nil)
+    |> assign(:confirming_clear, false)
+  end
+
+  defp do_export_text(%{assigns: %{selected_solution: nil}} = socket, _format),
+    do: {:noreply, socket}
+
+  defp do_export_text(%{assigns: %{fitting: nil}} = socket, _format), do: {:noreply, socket}
+
+  defp do_export_text(socket, format) do
+    solution = socket.assigns.selected_solution
+    ship = socket.assigns.fitting.ship_type
+    name = "#{socket.assigns.fitting.name} (Optimized)"
+
+    text =
+      case format do
+        :eft ->
+          Optimization.export_to_eft(solution, ship, name)
+
+        :json ->
+          solution
+          |> Optimization.export_to_json()
+          |> Jason.encode!(pretty: true)
+      end
+
+    Process.send_after(self(), :clear_copy_state, 1200)
+
+    {:noreply,
+     socket
+     |> assign(:copy_state, format)
+     |> push_event("copy_to_clipboard", %{text: text})}
+  end
 
   defp load_module_types do
     case Ash.read(ModuleType) do
@@ -402,18 +413,58 @@ defmodule AbyssalwatchWeb.OptimizationLive do
     })
   end
 
+  defp derive_types_from_fit(%{fitting: nil}), do: []
+
+  defp derive_types_from_fit(%{fitting: fit, module_types: types}) do
+    fit_module_names =
+      [fit.low_slots, fit.med_slots, fit.high_slots, fit.rig_slots]
+      |> List.flatten()
+      |> Enum.map(&module_name/1)
+      |> Enum.reject(&is_nil/1)
+      |> MapSet.new()
+
+    types
+    |> Enum.filter(fn t ->
+      MapSet.member?(fit_module_names, t.name) or
+        Enum.any?(fit_module_names, &String.contains?(&1, t.name))
+    end)
+    |> Enum.map(& &1.eve_type_id)
+  end
+
+  defp module_name(%{name: name}), do: name
+  defp module_name(name) when is_binary(name), do: name
+  defp module_name(_), do: nil
+
+  defp put_criteria_weight(criteria, key, value) do
+    field =
+      case key do
+        "price" -> :price_weight
+        "performance" -> :performance_weight
+        "efficiency" -> :efficiency_weight
+        "volume" -> :volume_weight
+        _ -> nil
+      end
+
+    if field, do: Map.put(criteria, field, value), else: criteria
+  end
+
+  defp normalize_solver("constraint"), do: :constraint
+  defp normalize_solver(_), do: :heuristic
+
   defp get_slot_type(nil), do: :low
   defp get_slot_type(%{slot_type: "high"}), do: :high
   defp get_slot_type(%{slot_type: "med"}), do: :med
   defp get_slot_type(%{slot_type: "low"}), do: :low
   defp get_slot_type(%{slot_type: "rig"}), do: :rig
 
-  defp get_slot_type(%{category: category}) do
+  defp get_slot_type(%{category: c}) do
+    cd = String.downcase(c || "")
+
     cond do
-      String.contains?(String.downcase(category || ""), "propulsion") -> :med
-      String.contains?(String.downcase(category || ""), "shield") -> :med
-      String.contains?(String.downcase(category || ""), "armor") -> :low
-      String.contains?(String.downcase(category || ""), "damage") -> :low
+      String.contains?(cd, "propulsion") -> :med
+      String.contains?(cd, "shield") -> :med
+      String.contains?(cd, "armor") -> :low
+      String.contains?(cd, "damage") -> :low
       true -> :low
     end
   end
@@ -423,7 +474,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   defp parse_float(value, _default) when is_binary(value) do
     case Float.parse(value) do
-      {float, _} -> float
+      {f, _} -> f
       :error -> 0.0
     end
   end
@@ -436,7 +487,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   defp parse_int(value, _default) when is_binary(value) do
     case Integer.parse(value) do
-      {int, _} -> int
+      {i, _} -> i
       :error -> 0
     end
   end
@@ -449,632 +500,1015 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   defp parse_decimal(value) when is_binary(value) do
     case Decimal.parse(value) do
-      {decimal, _} -> decimal
+      {d, _} -> d
       :error -> nil
     end
   end
 
   defp parse_decimal(_), do: nil
 
-  defp step_index(step), do: Enum.find_index(@steps, &(&1 == step)) || 0
+  defp format_solver_error(reason) when is_binary(reason), do: reason
+  defp format_solver_error(reason), do: inspect(reason)
 
-  defp step_complete?(step, current_step) do
-    step_index(step) < step_index(current_step)
-  end
+  defp upload_error(:too_large), do: "File is too large (max 100KB)"
+  defp upload_error(:too_many_files), do: "Only one file allowed"
+  defp upload_error(:not_accepted), do: "Use .txt or .eft files"
+  defp upload_error(err), do: "Upload error: #{inspect(err)}"
 
-  defp step_current?(step, current_step), do: step == current_step
-
-  # Render
+  # ── Render ─────────────────────────────────────────────────────────
 
   @impl true
   def render(assigns) do
+    abyssal_count =
+      if assigns.fitting, do: count_abyssal_slots(assigns.fitting), else: 0
+
+    assigns = assign(assigns, :abyssal_count, abyssal_count)
+
     ~H"""
-    <div class="container mx-auto px-4 py-8 max-w-6xl">
-      <h1 class="text-3xl font-bold mb-8">Ship Fitting Optimization</h1>
-      
-    <!-- Progress Steps -->
-      <ul class="steps steps-horizontal w-full mb-8">
-        <%= for step <- @steps do %>
-          <li class={"step #{if step_complete?(step, @step), do: "step-primary"} #{if step_current?(step, @step), do: "step-primary font-bold"}"}>
-            {step_label(step)}
-          </li>
-        <% end %>
-      </ul>
-      
-    <!-- Step Content -->
-      <div class="bg-base-200 rounded-lg p-6">
-        <%= case @step do %>
-          <% :import -> %>
-            <.import_step {assigns} />
-          <% :constraints -> %>
-            <.constraints_step {assigns} />
-          <% :objectives -> %>
-            <.objectives_step {assigns} />
-          <% :optimize -> %>
-            <.optimize_step {assigns} />
-          <% :results -> %>
-            <.results_step {assigns} />
-        <% end %>
+    <div
+      id="optimize-root"
+      phx-window-keydown="keydown"
+      class="flex flex-col gap-6"
+    >
+      <.fitting_strip
+        fitting={@fitting}
+        eft_input={@eft_input}
+        eft_error={@eft_error}
+        uploads={@uploads}
+        confirming_clear={@confirming_clear}
+        abyssal_count={@abyssal_count}
+        solution_count={length(@solutions)}
+      />
+
+      <div class="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-8">
+        <.tune_sidebar
+          fitting={@fitting}
+          constraints={@constraints}
+          criteria={@criteria}
+          solver_mode={@solver_mode}
+          included_type_ids={@included_type_ids}
+          module_types={@module_types}
+          types_popover_open={@types_popover_open}
+          type_filter={@type_filter}
+        />
+
+        <div class="min-w-0 space-y-4">
+          <.runbar
+            fitting={@fitting}
+            included_type_ids={@included_type_ids}
+            solver_mode={@solver_mode}
+            optimizing={@optimizing}
+            loading_modules={@loading_modules}
+            optimization_elapsed={@optimization_elapsed}
+            optimization_error={@optimization_error}
+          />
+
+          <.solutions_panel
+            fitting={@fitting}
+            solutions={@solutions}
+            selected_solution={@selected_solution}
+            optimizing={@optimizing}
+            constraints={@constraints}
+            copy_state={@copy_state}
+          />
+        </div>
       </div>
     </div>
     """
   end
 
-  defp import_step(assigns) do
-    ~H"""
-    <div>
-      <h2 class="text-xl font-semibold mb-4">Import Fitting</h2>
-      <p class="text-gray-500 mb-4">
-        Import your ship fitting in EFT format. You can paste it directly or upload a file.
-      </p>
+  # ── Fitting strip ──────────────────────────────────────────────────
 
-      <%= if @fitting do %>
-        <div class="alert alert-success mb-4">
-          <span>Loaded: <strong>{@fitting.ship_type}</strong> - {@fitting.name}</span>
-          <button class="btn btn-ghost btn-sm" phx-click="clear_fitting">Clear</button>
+  attr :fitting, :any, required: true
+  attr :eft_input, :string, required: true
+  attr :eft_error, :any, required: true
+  attr :uploads, :map, required: true
+  attr :confirming_clear, :boolean, required: true
+  attr :abyssal_count, :integer, required: true
+  attr :solution_count, :integer, required: true
+
+  defp fitting_strip(assigns) do
+    ~H"""
+    <%= if @fitting do %>
+      <div class="panel">
+        <div class="px-5 py-3 flex items-center justify-between gap-4">
+          <div class="flex items-baseline gap-3 min-w-0">
+            <span class="text-ink-3 text-[12px]" aria-hidden="true">▸</span>
+            <span class="text-ink-1 font-medium truncate">{@fitting.ship_type}</span>
+            <span class="text-ink-3 text-[13px] truncate">· {@fitting.name}</span>
+            <span class="text-ink-4 text-[12px] tnum shrink-0">
+              · {@abyssal_count} fitted {pluralize(@abyssal_count, "slot", "slots")}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <%= if @confirming_clear do %>
+              <span class="text-[12px] text-ink-3 tnum">
+                Discard {@solution_count} {pluralize(@solution_count, "solution", "solutions")}?
+              </span>
+              <button
+                type="button"
+                class="btn btn-sm btn-danger"
+                phx-click="clear_fitting"
+              >
+                Clear
+              </button>
+              <button type="button" class="btn btn-sm btn-ghost" phx-click="cancel_clear">
+                Keep
+              </button>
+            <% else %>
+              <button
+                type="button"
+                class="btn btn-sm btn-ghost"
+                phx-click="clear_fitting"
+              >
+                <.icon name="hero-x-mark" class="size-4" /> Clear fit
+              </button>
+            <% end %>
+          </div>
         </div>
-      <% else %>
-        <div class="tabs tabs-boxed mb-4">
-          <button
-            class="tab tab-active"
-            id="paste-tab"
-            onclick="document.getElementById('paste-panel').classList.remove('hidden'); document.getElementById('upload-panel').classList.add('hidden'); this.classList.add('tab-active'); document.getElementById('upload-tab').classList.remove('tab-active');"
-          >
-            Paste EFT
-          </button>
-          <button
-            class="tab"
-            id="upload-tab"
-            onclick="document.getElementById('upload-panel').classList.remove('hidden'); document.getElementById('paste-panel').classList.add('hidden'); this.classList.add('tab-active'); document.getElementById('paste-tab').classList.remove('tab-active');"
-          >
-            Upload File
-          </button>
-        </div>
-        
-    <!-- Paste Panel -->
-        <div id="paste-panel">
-          <div class="form-control">
-            <textarea
-              class="textarea textarea-bordered h-64 font-mono text-sm"
-              placeholder="[Ship Type, Fitting Name]&#10;&#10;Damage Control II&#10;Armor Plates&#10;&#10;10MN Afterburner II&#10;Warp Scrambler II&#10;&#10;..."
-              phx-change="update_eft_input"
-              name="eft"
-            ><%= @eft_input %></textarea>
+      </div>
+    <% else %>
+      <div class="panel">
+        <div class="px-5 py-5">
+          <div class="flex items-baseline justify-between mb-3">
+            <h2 class="text-[15px] font-semibold text-ink-1">
+              Paste an EFT to begin
+            </h2>
+            <label class="text-[12px] text-ink-3 hover:text-ink-1 cursor-pointer">
+              Or upload .eft <.live_file_input upload={@uploads.eft_file} class="sr-only" />
+            </label>
           </div>
 
-          <div class="mt-4">
+          <form phx-change="update_eft_input" phx-submit="parse_eft" id="eft-form">
+            <textarea
+              id="eft-paste"
+              name="eft"
+              phx-debounce="300"
+              class="textarea font-mono text-[12px] leading-snug"
+              style="min-height: 96px; max-height: 320px;"
+              placeholder={eft_placeholder()}
+              phx-hook=".PasteParse"
+            ><%= @eft_input %></textarea>
+          </form>
+
+          <%= if @eft_error do %>
+            <div class="mt-3 flex items-start gap-2 text-status-error text-[13px]">
+              <span class="mt-0.5" aria-hidden="true">!</span>
+              <div class="flex-1">
+                <p class="text-ink-1">EFT parse failed</p>
+                <p class="text-ink-3 text-[12px]">{@eft_error}</p>
+              </div>
+            </div>
+          <% end %>
+
+          <%= for entry <- @uploads.eft_file.entries do %>
+            <div class="mt-3 flex items-center gap-2 text-[12px] text-ink-3">
+              <span class="truncate flex-1">{entry.client_name}</span>
+              <span class="tnum">{entry.progress}%</span>
+              <button
+                type="button"
+                class="btn btn-sm btn-ghost"
+                phx-click="cancel_upload"
+                phx-value-ref={entry.ref}
+              >
+                Cancel
+              </button>
+            </div>
+            <%= for err <- upload_errors(@uploads.eft_file, entry) do %>
+              <p class="mt-1 text-status-error text-[12px]">{upload_error(err)}</p>
+            <% end %>
+          <% end %>
+
+          <div class="mt-3 flex items-center justify-between">
+            <p class="text-[11px] text-ink-4">
+              Drop a .eft file on the textarea, or paste then press Ctrl-Enter.
+            </p>
             <button
-              class="btn btn-primary"
+              type="button"
+              class="btn btn-primary btn-sm"
               phx-click="parse_eft"
               disabled={String.trim(@eft_input) == ""}
             >
-              Parse Fitting
+              Load fitting
             </button>
           </div>
+
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".PasteParse">
+            export default {
+              mounted() {
+                const ta = this.el
+                ta.addEventListener("keydown", (e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                    e.preventDefault()
+                    this.pushEvent("parse_eft", {})
+                  }
+                })
+                ta.addEventListener("dragover", (e) => { e.preventDefault() })
+                ta.addEventListener("drop", (e) => {
+                  if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return
+                  e.preventDefault()
+                  const file = e.dataTransfer.files[0]
+                  const reader = new FileReader()
+                  reader.onload = () => {
+                    ta.value = reader.result
+                    ta.dispatchEvent(new Event("input", { bubbles: true }))
+                  }
+                  reader.readAsText(file)
+                })
+              }
+            }
+          </script>
         </div>
-        
-    <!-- Upload Panel -->
-        <div id="upload-panel" class="hidden">
-          <form id="upload-form" phx-submit="upload_eft" phx-change="validate_upload">
-            <div class="border-2 border-dashed border-base-300 rounded-lg p-8 text-center">
-              <.live_file_input
-                upload={@uploads.eft_file}
-                class="file-input file-input-bordered w-full max-w-xs"
-              />
-              <p class="mt-2 text-sm text-gray-500">
-                Upload a .txt or .eft file containing your fitting in EFT format
-              </p>
-
-              <%= for entry <- @uploads.eft_file.entries do %>
-                <div class="mt-4 flex items-center justify-center gap-2">
-                  <span class="text-sm">{entry.client_name}</span>
-                  <progress class="progress progress-primary w-24" value={entry.progress} max="100">
-                  </progress>
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-xs"
-                    phx-click="cancel-upload"
-                    phx-value-ref={entry.ref}
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <%= for err <- upload_errors(@uploads.eft_file, entry) do %>
-                  <p class="text-error text-sm mt-1">{error_to_string(err)}</p>
-                <% end %>
-              <% end %>
-            </div>
-
-            <div class="mt-4">
-              <button
-                type="submit"
-                class="btn btn-primary"
-                disabled={Enum.empty?(@uploads.eft_file.entries)}
-              >
-                Upload & Parse
-              </button>
-            </div>
-          </form>
-        </div>
-      <% end %>
-
-      <%= if @fitting do %>
-        <div class="mt-6 flex justify-end">
-          <button class="btn btn-primary" phx-click="set_step" phx-value-step="constraints">
-            Next: Configure Constraints →
-          </button>
-        </div>
-      <% end %>
-    </div>
+      </div>
+    <% end %>
     """
   end
 
-  defp constraints_step(assigns) do
+  defp eft_placeholder do
+    """
+    [Astero, Cap-Stable Tank]
+
+    Damage Control II
+    Small Armor Repairer II
+    [Empty Low slot]
+
+    1MN Afterburner II
+    [Empty Med slot]
+
+    Light Neutron Blaster II
+    [Empty High slot]
+    """
+  end
+
+  defp count_abyssal_slots(%{low_slots: l, med_slots: m, high_slots: h, rig_slots: r}) do
+    Enum.count(List.flatten([l, m, h, r]), &(&1 != nil))
+  end
+
+  defp count_abyssal_slots(_), do: 0
+
+  defp pluralize(1, s, _), do: s
+  defp pluralize(_, _, p), do: p
+
+  # ── Sidebar ────────────────────────────────────────────────────────
+
+  attr :fitting, :any, required: true
+  attr :constraints, :map, required: true
+  attr :criteria, :any, required: true
+  attr :solver_mode, :atom, required: true
+  attr :included_type_ids, :list, required: true
+  attr :module_types, :list, required: true
+  attr :types_popover_open, :boolean, required: true
+  attr :type_filter, :string, required: true
+
+  defp tune_sidebar(assigns) do
+    disabled = is_nil(assigns.fitting)
+    assigns = assign(assigns, :disabled, disabled)
+
     ~H"""
-    <div>
-      <h2 class="text-xl font-semibold mb-4">Configure Constraints</h2>
-      <p class="text-gray-500 mb-4">
-        Set your ship's resource limits. These determine which modules can be fitted.
-      </p>
+    <aside
+      class={[
+        "panel self-start lg:sticky lg:top-[72px] max-h-[calc(100vh-72px)] overflow-y-auto",
+        @disabled && "opacity-60 pointer-events-none"
+      ]}
+      aria-disabled={@disabled}
+    >
+      <div class="panel-header">
+        <h2 class="text-[13px] font-semibold uppercase tracking-wider text-ink-3">Tune</h2>
+        <span class="text-[11px] text-ink-4 tnum">
+          {if @fitting, do: "ready", else: "load a fit"}
+        </span>
+      </div>
 
-      <form phx-change="update_constraints" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- Resources -->
-        <div class="space-y-4">
-          <h3 class="font-semibold">Ship Resources</h3>
-
-          <div class="form-control">
-            <label class="label"><span class="label-text">CPU Capacity (tf)</span></label>
-            <input
-              type="number"
+      <div class="panel-body space-y-5">
+        <section>
+          <h3 class="field-label mb-2">Constraints</h3>
+          <form phx-change="update_constraints" phx-debounce="300" class="space-y-2">
+            <.constraint_field
+              label="CPU"
+              unit="tf"
               name="cpu_capacity"
-              class="input input-bordered"
               value={@constraints.cpu_capacity}
-              step="0.1"
             />
-          </div>
-
-          <div class="form-control">
-            <label class="label"><span class="label-text">Power Grid Capacity (MW)</span></label>
-            <input
-              type="number"
+            <.constraint_field
+              label="Power grid"
+              unit="MW"
               name="power_capacity"
-              class="input input-bordered"
               value={@constraints.power_capacity}
-              step="0.1"
             />
-          </div>
-
-          <div class="form-control">
-            <label class="label"><span class="label-text">Calibration (points)</span></label>
-            <input
-              type="number"
+            <.constraint_field
+              label="Calibration"
+              unit=""
               name="calibration_capacity"
-              class="input input-bordered"
               value={@constraints.calibration_capacity}
             />
-          </div>
+            <div class="grid grid-cols-[1fr_auto] items-center gap-2 pt-1">
+              <span class="text-[12px] text-ink-3">Max budget (ISK)</span>
+              <input
+                type="number"
+                name="max_price"
+                class="input input-sm tnum w-32 text-right"
+                placeholder="No limit"
+                value={@constraints.max_price}
+              />
+            </div>
+          </form>
+        </section>
 
-          <div class="form-control">
-            <label class="label"><span class="label-text">Max Budget (ISK, optional)</span></label>
+        <section>
+          <h3 class="field-label mb-2">Slots</h3>
+          <form phx-change="update_constraints" phx-debounce="300" class="grid grid-cols-4 gap-2">
+            <.slot_field name="high_slots" label="H" value={@constraints.available_slots.high} />
+            <.slot_field name="med_slots" label="M" value={@constraints.available_slots.med} />
+            <.slot_field name="low_slots" label="L" value={@constraints.available_slots.low} />
+            <.slot_field name="rig_slots" label="R" value={@constraints.available_slots.rig} />
+            <input type="hidden" name="cpu_capacity" value={@constraints.cpu_capacity} />
+            <input type="hidden" name="power_capacity" value={@constraints.power_capacity} />
             <input
-              type="number"
-              name="max_price"
-              class="input input-bordered"
-              placeholder="No limit"
-              value={@constraints.max_price}
+              type="hidden"
+              name="calibration_capacity"
+              value={@constraints.calibration_capacity}
+            />
+            <input type="hidden" name="max_price" value={@constraints.max_price} />
+          </form>
+        </section>
+
+        <section>
+          <h3 class="field-label mb-2">Objectives</h3>
+          <div class="space-y-2.5">
+            <%= for {key, label} <- objective_rows() do %>
+              <.objective_slider
+                key={key}
+                label={label}
+                value={objective_weight(@criteria, key)}
+              />
+            <% end %>
+          </div>
+        </section>
+
+        <section>
+          <h3 class="field-label mb-2">Solver</h3>
+          <div class="grid grid-cols-2 gap-1">
+            <.solver_radio
+              mode="heuristic"
+              current={@solver_mode}
+              label="Heuristic"
+              hint="under 1s"
+            />
+            <.solver_radio
+              mode="constraint"
+              current={@solver_mode}
+              label="Constraint"
+              hint="up to 30s"
             />
           </div>
-        </div>
-        
-    <!-- Slots -->
-        <div class="space-y-4">
-          <h3 class="font-semibold">Available Slots</h3>
+          <p class="mt-1.5 text-[11px] text-ink-4 leading-snug">
+            {if @solver_mode == :heuristic,
+              do: "Fast greedy fill. Best for exploring options.",
+              else: "Branch-and-bound search. Best for final tuning."}
+          </p>
+        </section>
 
-          <div class="form-control">
-            <label class="label"><span class="label-text">High Slots</span></label>
-            <input
-              type="number"
-              name="high_slots"
-              class="input input-bordered"
-              value={@constraints.available_slots.high}
-              min="0"
-              max="8"
-            />
+        <section class="relative">
+          <div class="flex items-baseline justify-between mb-2">
+            <h3 class="field-label mb-0">Module types</h3>
+            <span class="text-[11px] text-ink-4 tnum">
+              {length(@included_type_ids)} included
+            </span>
           </div>
+          <p class="text-[11px] text-ink-4 leading-snug">
+            Auto from fit.
+            <button
+              type="button"
+              phx-click="toggle_types_popover"
+              class="text-ink-2 hover:text-ink-1 underline underline-offset-2 ml-1"
+            >
+              Edit included
+            </button>
+          </p>
 
-          <div class="form-control">
-            <label class="label"><span class="label-text">Med Slots</span></label>
-            <input
-              type="number"
-              name="med_slots"
-              class="input input-bordered"
-              value={@constraints.available_slots.med}
-              min="0"
-              max="8"
+          <%= if @types_popover_open do %>
+            <.types_popover
+              module_types={@module_types}
+              included_type_ids={@included_type_ids}
+              type_filter={@type_filter}
             />
-          </div>
+          <% end %>
+        </section>
+      </div>
+    </aside>
+    """
+  end
 
-          <div class="form-control">
-            <label class="label"><span class="label-text">Low Slots</span></label>
-            <input
-              type="number"
-              name="low_slots"
-              class="input input-bordered"
-              value={@constraints.available_slots.low}
-              min="0"
-              max="8"
-            />
-          </div>
+  attr :label, :string, required: true
+  attr :unit, :string, required: true
+  attr :name, :string, required: true
+  attr :value, :any, required: true
 
-          <div class="form-control">
-            <label class="label"><span class="label-text">Rig Slots</span></label>
-            <input
-              type="number"
-              name="rig_slots"
-              class="input input-bordered"
-              value={@constraints.available_slots.rig}
-              min="0"
-              max="3"
-            />
-          </div>
-        </div>
+  defp constraint_field(assigns) do
+    ~H"""
+    <div class="grid grid-cols-[1fr_auto] items-center gap-2">
+      <span class="text-[12px] text-ink-3">
+        {@label}<span :if={@unit != ""} class="text-ink-4"> ({@unit})</span>
+      </span>
+      <input
+        type="number"
+        name={@name}
+        class="input input-sm tnum w-24 text-right"
+        value={@value}
+        step="0.1"
+      />
+    </div>
+    """
+  end
+
+  attr :name, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :any, required: true
+
+  defp slot_field(assigns) do
+    ~H"""
+    <label class="flex flex-col items-center gap-1">
+      <span class="text-[10px] uppercase tracking-wider text-ink-3 font-medium">{@label}</span>
+      <input
+        type="number"
+        name={@name}
+        class="input input-sm tnum text-center px-0 w-full"
+        value={@value}
+        min="0"
+        max="8"
+      />
+    </label>
+    """
+  end
+
+  defp objective_rows do
+    [
+      {"price", "Price"},
+      {"performance", "Performance"},
+      {"efficiency", "Efficiency"},
+      {"volume", "Availability"}
+    ]
+  end
+
+  defp objective_weight(criteria, "price"), do: criteria.price_weight || 0.0
+  defp objective_weight(criteria, "performance"), do: criteria.performance_weight || 0.0
+  defp objective_weight(criteria, "efficiency"), do: criteria.efficiency_weight || 0.0
+  defp objective_weight(criteria, "volume"), do: criteria.volume_weight || 0.0
+  defp objective_weight(_, _), do: 0.0
+
+  attr :key, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :any, required: true
+
+  defp objective_slider(assigns) do
+    ~H"""
+    <form
+      phx-change="update_objective"
+      phx-debounce="200"
+      class="grid grid-cols-[64px_1fr_28px] items-center gap-2"
+    >
+      <span class="text-[12px] text-ink-3">{@label}</span>
+      <input type="hidden" name="key" value={@key} />
+      <input
+        type="range"
+        name="value"
+        min="0"
+        max="1"
+        step="0.05"
+        value={@value}
+        class="w-full accent-accent"
+      />
+      <span class="text-[11px] text-ink-2 tnum text-right">
+        {format_weight(@value)}
+      </span>
+    </form>
+    """
+  end
+
+  defp format_weight(value) when is_number(value),
+    do: :erlang.float_to_binary(value * 1.0, decimals: 2)
+
+  defp format_weight(_), do: "0.50"
+
+  attr :mode, :string, required: true
+  attr :current, :atom, required: true
+  attr :label, :string, required: true
+  attr :hint, :string, required: true
+
+  defp solver_radio(assigns) do
+    selected = to_string(assigns.current) == assigns.mode
+    assigns = assign(assigns, :selected, selected)
+
+    ~H"""
+    <label class={[
+      "text-[12px] text-center py-1.5 border rounded-md cursor-pointer transition-colors",
+      if(@selected,
+        do: "bg-surface-3 text-ink-1 border-rule-strong",
+        else: "text-ink-3 border-rule-1 hover:text-ink-1 hover:border-rule-2"
+      )
+    ]}>
+      <input
+        type="radio"
+        name="mode"
+        value={@mode}
+        checked={@selected}
+        phx-click="update_solver_mode"
+        phx-value-mode={@mode}
+        class="sr-only"
+      />
+      <span class="block">{@label}</span>
+      <span class="block text-[10px] text-ink-4 mt-0.5">{@hint}</span>
+    </label>
+    """
+  end
+
+  attr :module_types, :list, required: true
+  attr :included_type_ids, :list, required: true
+  attr :type_filter, :string, required: true
+
+  defp types_popover(assigns) do
+    filter = String.downcase(assigns.type_filter || "")
+
+    filtered =
+      if filter == "" do
+        assigns.module_types
+      else
+        Enum.filter(assigns.module_types, fn t ->
+          String.contains?(String.downcase(t.name), filter)
+        end)
+      end
+
+    assigns = assign(assigns, :filtered, filtered)
+
+    ~H"""
+    <div
+      id="types-popover"
+      class="absolute z-30 mt-2 left-0 right-0 panel"
+      style="box-shadow: var(--shadow-popover);"
+      phx-click-away="close_types_popover"
+      role="dialog"
+      aria-label="Edit included module types"
+    >
+      <div class="panel-header">
+        <span class="text-[12px] text-ink-3">
+          {length(@included_type_ids)} of {length(@module_types)} included
+        </span>
+        <button
+          type="button"
+          phx-click="reset_types_to_fit"
+          class="text-[11px] text-ink-2 hover:text-ink-1 underline underline-offset-2"
+        >
+          Reset to fit
+        </button>
+      </div>
+
+      <form phx-change="filter_types" class="px-3 py-2 border-b border-rule-1">
+        <input
+          type="text"
+          name="q"
+          value={@type_filter}
+          phx-debounce="150"
+          placeholder="Filter types"
+          class="input input-sm"
+          autocomplete="off"
+        />
       </form>
 
-      <div class="mt-6 flex justify-between">
-        <button class="btn btn-ghost" phx-click="set_step" phx-value-step="import">
-          ← Back
-        </button>
-        <button class="btn btn-primary" phx-click="next_from_constraints">
-          Next: Select Module Types →
-        </button>
-      </div>
-    </div>
-    """
-  end
-
-  defp objectives_step(assigns) do
-    ~H"""
-    <div>
-      <h2 class="text-xl font-semibold mb-4">Select Module Types</h2>
-      <p class="text-gray-500 mb-4">
-        Choose which abyssal module types to include in the optimization.
-      </p>
-      
-    <!-- Module Type Selection -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
-        <%= for type <- @module_types do %>
-          <label class={"cursor-pointer card bg-base-100 p-3 hover:bg-base-300 transition-colors #{if type.eve_type_id in @selected_types, do: "ring-2 ring-primary"}"}>
-            <input
-              type="checkbox"
-              class="hidden"
+      <ul class="max-h-72 overflow-y-auto py-1">
+        <%= for type <- @filtered do %>
+          <% included = type.eve_type_id in @included_type_ids %>
+          <li>
+            <button
+              type="button"
               phx-click="toggle_module_type"
               phx-value-type_id={type.eve_type_id}
-              checked={type.eve_type_id in @selected_types}
-            />
-            <div class="flex items-center gap-2">
-              <input
-                type="checkbox"
-                class="checkbox checkbox-primary checkbox-sm"
-                checked={type.eve_type_id in @selected_types}
-                readonly
-              />
-              <div>
-                <div class="font-medium text-sm">{type.name}</div>
-                <div class="text-xs text-gray-500">{type.category}</div>
-              </div>
-            </div>
-          </label>
-        <% end %>
-      </div>
-      
-    <!-- Solver Mode -->
-      <div class="form-control mb-6">
-        <label class="label"><span class="label-text font-semibold">Solver Mode</span></label>
-        <select
-          class="select select-bordered w-full max-w-xs"
-          phx-change="update_solver_mode"
-          name="mode"
-        >
-          <option value="heuristic" selected={@solver_mode == :heuristic}>
-            Heuristic (Fast, ~100ms)
-          </option>
-          <option value="constraint" selected={@solver_mode == :constraint}>
-            Constraint (Thorough, ~1-30s)
-          </option>
-        </select>
-        <label class="label">
-          <span class="label-text-alt text-gray-500">
-            <%= if @solver_mode == :heuristic do %>
-              Fast greedy algorithm. Good for exploring options quickly.
-            <% else %>
-              Branch-and-bound solver. Better for final optimization decisions.
-            <% end %>
-          </span>
-        </label>
-      </div>
-
-      <div class="mt-6 flex justify-between">
-        <button class="btn btn-ghost" phx-click="set_step" phx-value-step="constraints">
-          ← Back
-        </button>
-        <button
-          class="btn btn-primary"
-          phx-click="fetch_candidates"
-          disabled={Enum.empty?(@selected_types) || @loading_modules}
-        >
-          <%= if @loading_modules do %>
-            <span class="loading loading-spinner loading-sm"></span> Loading Modules...
-          <% else %>
-            Fetch Modules & Continue →
-          <% end %>
-        </button>
-      </div>
-    </div>
-    """
-  end
-
-  defp optimize_step(assigns) do
-    ~H"""
-    <div>
-      <h2 class="text-xl font-semibold mb-4">Run Optimization</h2>
-
-      <div class="stats shadow mb-6">
-        <div class="stat">
-          <div class="stat-title">Candidates</div>
-          <div class="stat-value text-primary">{length(@candidates)}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">Solver</div>
-          <div class="stat-value text-secondary">{@solver_mode}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">Slots</div>
-          <div class="stat-value">
-            {@constraints.available_slots.high + @constraints.available_slots.med +
-              @constraints.available_slots.low + @constraints.available_slots.rig}
-          </div>
-        </div>
-      </div>
-
-      <%= if @optimization_error do %>
-        <div class="alert alert-error mb-4">
-          <span>{@optimization_error}</span>
-        </div>
-      <% end %>
-
-      <div class="text-center py-8">
-        <%= if @optimizing do %>
-          <div class="flex flex-col items-center gap-4">
-            <span class="loading loading-spinner loading-lg text-primary"></span>
-            
-    <!-- Progress bar (indeterminate) -->
-            <div class="w-64">
-              <progress class="progress progress-primary w-full"></progress>
-            </div>
-            
-    <!-- Status message -->
-            <p class="text-gray-500 animate-pulse">{@optimization_status}</p>
-            
-    <!-- Elapsed time -->
-            <div class="text-sm text-gray-400">
-              Elapsed: <span class="font-mono">{format_elapsed(@optimization_elapsed)}</span>
-            </div>
-            
-    <!-- Solver info -->
-            <div class="text-xs text-gray-400 mt-2">
-              <%= if @solver_mode == :constraint do %>
-                Constraint solver may take up to 30 seconds for complex fittings
-              <% else %>
-                Heuristic solver is typically fast (&lt; 1 second)
-              <% end %>
-            </div>
-          </div>
-        <% else %>
-          <button class="btn btn-primary btn-lg" phx-click="run_optimization">
-            Run Optimization
-          </button>
-        <% end %>
-      </div>
-
-      <div class="mt-6 flex justify-between">
-        <button
-          class="btn btn-ghost"
-          phx-click="set_step"
-          phx-value-step="objectives"
-          disabled={@optimizing}
-        >
-          ← Back
-        </button>
-      </div>
-    </div>
-    """
-  end
-
-  defp results_step(assigns) do
-    ~H"""
-    <div>
-      <h2 class="text-xl font-semibold mb-4">Optimization Results</h2>
-
-      <%= if Enum.empty?(@solutions) do %>
-        <div class="alert alert-warning">
-          <span>
-            No solutions found. Try adjusting constraints or selecting different module types.
-          </span>
-        </div>
-      <% else %>
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <!-- Solution List -->
-          <div class="lg:col-span-1 space-y-2">
-            <h3 class="font-semibold mb-2">Solutions ({length(@solutions)})</h3>
-            <%= for {solution, idx} <- Enum.with_index(@solutions) do %>
-              <div
-                class={"card bg-base-100 p-3 cursor-pointer hover:bg-base-300 #{if @selected_solution && @selected_solution.id == solution.id, do: "ring-2 ring-primary"}"}
-                phx-click="select_solution"
-                phx-value-index={idx}
+              class={[
+                "w-full flex items-center gap-3 px-3 py-1.5 text-left transition-colors",
+                included && "bg-surface-2"
+              ]}
+            >
+              <span
+                class={[
+                  "w-3.5 h-3.5 rounded-sm border inline-flex items-center justify-center text-[10px]",
+                  included && "bg-accent border-accent text-accent-ink",
+                  !included && "border-rule-2"
+                ]}
+                aria-hidden="true"
               >
-                <div class="flex justify-between items-center">
-                  <div>
-                    <span class="badge badge-primary badge-sm mr-2">#{solution.rank}</span>
-                    <span class="font-medium">Score: {Float.round(solution.total_score, 2)}</span>
-                  </div>
-                  <div class="text-sm text-gray-500">
-                    {format_price(solution.total_price)}
-                  </div>
-                </div>
-                <div class="text-xs text-gray-500 mt-1">
-                  {length(solution.modules)} modules
-                </div>
-              </div>
-            <% end %>
-          </div>
-          
-    <!-- Solution Details -->
-          <div class="lg:col-span-2">
-            <%= if @selected_solution do %>
-              <div class="card bg-base-100 p-4">
-                <div class="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 class="text-lg font-semibold">Solution #{@selected_solution.rank}</h3>
-                    <div class="text-sm text-gray-500">
-                      Total Score:
-                      <span class="font-mono">{Float.round(@selected_solution.total_score, 4)}</span>
-                    </div>
-                  </div>
-                  <div class="flex gap-2">
-                    <button class="btn btn-primary btn-sm" phx-click="export_eft">
-                      Copy EFT
-                    </button>
-                    <button class="btn btn-secondary btn-sm" phx-click="export_json">
-                      Copy JSON
-                    </button>
-                  </div>
-                </div>
-                
-    <!-- Resource Usage -->
-                <div class="mb-4">
-                  <h4 class="font-medium mb-2">Resource Usage</h4>
-                  <div class="grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <span class="text-gray-500">CPU:</span>
-                      {Float.round(@selected_solution.resource_usage.cpu, 1)} / {@constraints.cpu_capacity} tf
-                    </div>
-                    <div>
-                      <span class="text-gray-500">Power:</span>
-                      {Float.round(@selected_solution.resource_usage.power, 1)} / {@constraints.power_capacity} MW
-                    </div>
-                    <div>
-                      <span class="text-gray-500">Calibration:</span>
-                      {Float.round(@selected_solution.resource_usage.calibration, 1)} / {@constraints.calibration_capacity}
-                    </div>
-                  </div>
-                </div>
-                
-    <!-- Modules -->
-                <div>
-                  <h4 class="font-medium mb-2">Fitted Modules</h4>
-                  <div class="space-y-2">
-                    <%= for {slot_type, label} <- [{:high, "High"}, {:med, "Med"}, {:low, "Low"}, {:rig, "Rig"}] do %>
-                      <% slot_modules =
-                        Enum.filter(@selected_solution.modules, &(&1.slot_type == slot_type)) %>
-                      <%= if Enum.any?(slot_modules) do %>
-                        <div>
-                          <span class="badge badge-outline badge-sm">{label}</span>
-                          <div class="ml-4 mt-1 space-y-1">
-                            <%= for mod <- slot_modules do %>
-                              <div class="flex justify-between text-sm">
-                                <span>{mod.name}</span>
-                                <span class="text-gray-500">
-                                  {format_price(mod.price)}
-                                  <span class="ml-2 text-xs">
-                                    (score: {Float.round(mod.score, 2)})
-                                  </span>
-                                </span>
-                              </div>
-                            <% end %>
-                          </div>
-                        </div>
-                      <% end %>
-                    <% end %>
-                  </div>
-                </div>
-                
-    <!-- Total -->
-                <div class="mt-4 pt-4 border-t border-base-300">
-                  <div class="flex justify-between font-semibold">
-                    <span>Total Price</span>
-                    <span>{format_price(@selected_solution.total_price)}</span>
-                  </div>
-                </div>
-              </div>
-            <% else %>
-              <div class="text-center py-8 text-gray-500">
-                Select a solution to view details
-              </div>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
-
-      <div class="mt-6 flex justify-between items-center">
-        <button class="btn btn-ghost" phx-click="set_step" phx-value-step="optimize">
-          ← Back
-        </button>
-        <div class="flex gap-2">
-          <%= if not Enum.empty?(@solutions) do %>
-            <button class="btn btn-outline btn-sm" phx-click="export_all_json">
-              Download All (JSON)
+                {if included, do: "✓", else: ""}
+              </span>
+              <span class="text-[13px] text-ink-1 truncate flex-1">{type.name}</span>
+              <span class="text-[11px] text-ink-4 truncate">{type.category}</span>
             </button>
-          <% end %>
-          <button class="btn btn-outline" phx-click="start_over">
-            Start Over
+          </li>
+        <% end %>
+        <li :if={@filtered == []} class="px-3 py-4 text-[12px] text-ink-4 text-center">
+          No types match.
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  # ── Runbar ─────────────────────────────────────────────────────────
+
+  attr :fitting, :any, required: true
+  attr :included_type_ids, :list, required: true
+  attr :solver_mode, :atom, required: true
+  attr :optimizing, :boolean, required: true
+  attr :loading_modules, :boolean, required: true
+  attr :optimization_elapsed, :integer, required: true
+  attr :optimization_error, :any, required: true
+
+  defp runbar(assigns) do
+    ~H"""
+    <div class="panel">
+      <div class="px-5 py-3 flex items-center gap-4">
+        <%= if @optimizing do %>
+          <button type="button" class="btn btn-sm btn-danger" phx-click="cancel_optimize">
+            Cancel
           </button>
+          <span class="text-[12px] text-ink-3 animate-skeleton-pulse">
+            {if @loading_modules,
+              do: "Loading candidates",
+              else: "Optimizing"}
+          </span>
+          <span class="text-[12px] text-ink-3">·</span>
+          <span class="text-[12px] text-ink-2 capitalize">{@solver_mode}</span>
+          <span class="text-[12px] text-ink-3">·</span>
+          <span class="text-[12px] text-ink-1 tnum">{format_elapsed(@optimization_elapsed)}</span>
+        <% else %>
+          <button
+            type="button"
+            class="btn btn-primary"
+            phx-click="optimize"
+            disabled={is_nil(@fitting) or Enum.empty?(@included_type_ids)}
+          >
+            Optimize
+          </button>
+          <span class="text-[12px] text-ink-3">·</span>
+          <span class="text-[12px] text-ink-2 capitalize">{@solver_mode}</span>
+          <span class="text-[12px] text-ink-3">·</span>
+          <span class="text-[12px] text-ink-3 tnum">
+            {length(@included_type_ids)} {pluralize(length(@included_type_ids), "type", "types")}
+          </span>
+          <span class="text-[12px] text-ink-3 ml-auto">Ctrl-Enter to run</span>
+        <% end %>
+      </div>
+
+      <div :if={@optimization_error} class="px-5 py-3 border-t border-rule-1 flex items-start gap-2">
+        <span class="text-status-error mt-0.5" aria-hidden="true">!</span>
+        <div class="flex-1">
+          <p class="text-ink-1 text-[13px]">Optimization failed</p>
+          <p class="text-ink-3 text-[12px] mt-0.5">{@optimization_error}</p>
         </div>
+        <button type="button" class="btn btn-sm" phx-click="optimize">Retry</button>
       </div>
     </div>
     """
   end
 
-  defp step_label(:import), do: "Import"
-  defp step_label(:constraints), do: "Constraints"
-  defp step_label(:objectives), do: "Modules"
-  defp step_label(:optimize), do: "Optimize"
-  defp step_label(:results), do: "Results"
+  defp format_elapsed(0), do: "0.0s"
 
-  defp format_price(nil), do: "N/A"
+  defp format_elapsed(ms) when is_integer(ms) do
+    seconds = ms / 1000
 
-  defp format_price(%Decimal{} = price) do
+    cond do
+      seconds < 60 ->
+        :erlang.float_to_binary(seconds, decimals: 1) <> "s"
+
+      true ->
+        m = div(ms, 60_000)
+        s = rem(ms, 60_000) / 1000
+        "#{m}m #{:erlang.float_to_binary(s, decimals: 1)}s"
+    end
+  end
+
+  # ── Solutions panel ───────────────────────────────────────────────
+
+  attr :fitting, :any, required: true
+  attr :solutions, :list, required: true
+  attr :selected_solution, :any, required: true
+  attr :optimizing, :boolean, required: true
+  attr :constraints, :map, required: true
+  attr :copy_state, :atom, required: true
+
+  defp solutions_panel(assigns) do
+    ~H"""
+    <%= cond do %>
+      <% is_nil(@fitting) -> %>
+        <div class="panel">
+          <div class="px-6 py-12 text-center">
+            <p class="text-ink-1 text-[15px]">Load a fitting to begin.</p>
+            <p class="text-ink-3 text-[13px] mt-1">
+              Paste an EFT above. The optimizer will fill the abyssal slots.
+            </p>
+          </div>
+        </div>
+      <% Enum.empty?(@solutions) and @optimizing -> %>
+        <.solutions_skeleton />
+      <% Enum.empty?(@solutions) -> %>
+        <div class="panel">
+          <div class="px-6 py-12 text-center">
+            <p class="text-ink-1 text-[15px]">No run yet.</p>
+            <p class="text-ink-3 text-[13px] mt-1">
+              Press Optimize, or Ctrl-Enter, to fill the slots.
+            </p>
+          </div>
+        </div>
+      <% true -> %>
+        <div class={["space-y-4", @optimizing && "opacity-50"]}>
+          <.solutions_table
+            solutions={@solutions}
+            selected_solution={@selected_solution}
+            fitting={@fitting}
+          />
+          <.selected_detail
+            solution={@selected_solution}
+            constraints={@constraints}
+            fitting={@fitting}
+            copy_state={@copy_state}
+          />
+        </div>
+    <% end %>
+    """
+  end
+
+  defp solutions_skeleton(assigns) do
+    ~H"""
+    <div class="panel overflow-hidden">
+      <table class="dense">
+        <thead>
+          <tr>
+            <th class="w-6"></th>
+            <th>#</th>
+            <th class="text-right">Score</th>
+            <th class="text-right">Δ score</th>
+            <th class="text-right">Cost (ISK)</th>
+          </tr>
+        </thead>
+        <tbody class="animate-skeleton-pulse">
+          <%= for _ <- 1..3 do %>
+            <tr>
+              <td></td>
+              <td><span class="block h-3 w-6 bg-surface-2 rounded" /></td>
+              <td class="text-right">
+                <span class="block h-3 w-12 bg-surface-2 rounded ml-auto" />
+              </td>
+              <td class="text-right">
+                <span class="block h-3 w-12 bg-surface-2 rounded ml-auto" />
+              </td>
+              <td class="text-right">
+                <span class="block h-3 w-20 bg-surface-2 rounded ml-auto" />
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  attr :solutions, :list, required: true
+  attr :selected_solution, :any, required: true
+  attr :fitting, :any, required: true
+
+  defp solutions_table(assigns) do
+    ~H"""
+    <div class="panel overflow-hidden">
+      <table class="dense">
+        <thead>
+          <tr>
+            <th class="w-6" aria-hidden="true"></th>
+            <th class="w-12">#</th>
+            <th class="text-right">Score</th>
+            <th class="text-right">Δ score</th>
+            <th class="text-right">Cost (ISK)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for {solution, idx} <- Enum.with_index(@solutions) do %>
+            <% is_top = idx == 0
+            is_selected = @selected_solution && @selected_solution.id == solution.id
+            delta = score_delta(solution, @fitting) %>
+            <tr
+              id={"solution-#{idx}"}
+              phx-click="select_solution"
+              phx-value-index={idx}
+              class={[
+                "cursor-pointer",
+                is_selected && "is-selected"
+              ]}
+            >
+              <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
+                {if is_top, do: "▸", else: ""}
+              </td>
+              <td class="text-ink-2 tnum">{solution.rank || idx + 1}</td>
+              <td class="text-right">
+                <div class="inline-flex items-center justify-end gap-2">
+                  <span class="tnum text-ink-1">{format_score(solution.total_score)}</span>
+                  <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
+                    <span
+                      class="block h-full bg-accent"
+                      style={"width: #{round(min(solution.total_score, 1.0) * 100)}%"}
+                    />
+                  </span>
+                </div>
+              </td>
+              <td class="text-right tnum">
+                {delta_label(delta)}
+              </td>
+              <td class="text-right tnum">{format_price_plain(solution.total_price)}</td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  defp score_delta(_solution, _fitting) do
+    # Pilots' input fits rarely contain abyssal modules in the relevant
+    # slots, so a baseline isn't available yet. Render an em-dash placeholder.
+    nil
+  end
+
+  defp delta_label(nil), do: Phoenix.HTML.raw("<span class=\"text-ink-4\">—</span>")
+
+  defp delta_label(delta) when delta >= 0,
+    do: Phoenix.HTML.raw("<span class=\"text-ink-1\">+#{format_score(delta)}</span>")
+
+  defp delta_label(delta),
+    do: Phoenix.HTML.raw("<span class=\"text-status-error\">#{format_score(delta)}</span>")
+
+  attr :solution, :any, required: true
+  attr :constraints, :map, required: true
+  attr :fitting, :any, required: true
+  attr :copy_state, :atom, required: true
+
+  defp selected_detail(assigns) do
+    ~H"""
+    <%= if @solution do %>
+      <div class="panel">
+        <div class="panel-header">
+          <div class="flex items-baseline gap-3">
+            <span class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">
+              Selected
+            </span>
+            <span class="text-ink-1 tnum">#{@solution.rank}</span>
+            <span class="text-ink-3 text-[12px]">·</span>
+            <span class="text-ink-2 text-[12px]">
+              {length(@solution.modules)} modules
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="btn btn-sm btn-primary"
+              phx-click="export_eft"
+            >
+              {if @copy_state == :eft, do: "Copied", else: "Copy as EFT"}
+            </button>
+            <button
+              type="button"
+              class="btn btn-sm"
+              phx-click="export_json"
+            >
+              {if @copy_state == :json, do: "Copied", else: "Copy as JSON"}
+            </button>
+            <button type="button" class="btn btn-sm btn-ghost" phx-click="export_all_json">
+              Save all (JSON)
+            </button>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <.resource_meters solution={@solution} constraints={@constraints} />
+        </div>
+
+        <ul class="divide-y divide-rule-1 border-t border-rule-1">
+          <%= for {label, atom} <- [{"High", :high}, {"Med", :med}, {"Low", :low}, {"Rig", :rig}] do %>
+            <% modules = Enum.filter(@solution.modules, &(&1.slot_type == atom)) %>
+            <%= for {mod, slot_idx} <- Enum.with_index(modules, 1) do %>
+              <li class="px-5 py-2.5 flex items-baseline gap-4">
+                <span class="text-[11px] uppercase tracking-wider text-ink-3 font-medium w-14 shrink-0">
+                  {label} {slot_idx}
+                </span>
+                <span class="text-ink-1 text-[13px] flex-1 min-w-0 truncate">
+                  {mod.name}
+                </span>
+                <span class="text-ink-2 text-[12px] tnum">
+                  {format_score(mod.score)}
+                </span>
+                <span class="text-ink-3 text-[12px] tnum w-32 text-right">
+                  {format_price_plain(mod.price)} ISK
+                </span>
+              </li>
+            <% end %>
+          <% end %>
+        </ul>
+      </div>
+    <% else %>
+      <div class="panel">
+        <div class="px-6 py-8 text-center text-ink-3 text-[13px]">
+          Select a solution above.
+        </div>
+      </div>
+    <% end %>
+    """
+  end
+
+  attr :solution, :any, required: true
+  attr :constraints, :map, required: true
+
+  defp resource_meters(assigns) do
+    ~H"""
+    <div class="grid grid-cols-3 gap-4">
+      <.resource_meter
+        label="CPU"
+        unit="tf"
+        used={@solution.resource_usage.cpu}
+        cap={@constraints.cpu_capacity}
+      />
+      <.resource_meter
+        label="Power grid"
+        unit="MW"
+        used={@solution.resource_usage.power}
+        cap={@constraints.power_capacity}
+      />
+      <.resource_meter
+        label="Calibration"
+        unit=""
+        used={@solution.resource_usage.calibration}
+        cap={@constraints.calibration_capacity}
+      />
+    </div>
+    """
+  end
+
+  attr :label, :string, required: true
+  attr :unit, :string, required: true
+  attr :used, :any, required: true
+  attr :cap, :any, required: true
+
+  defp resource_meter(assigns) do
+    pct =
+      cond do
+        is_nil(assigns.cap) or assigns.cap == 0 -> 0.0
+        true -> min(assigns.used / assigns.cap, 1.0)
+      end
+
+    over = assigns.used > assigns.cap
+    assigns = assign(assigns, :pct, pct) |> assign(:over, over)
+
+    ~H"""
+    <div>
+      <div class="flex items-baseline justify-between">
+        <span class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">
+          {@label}
+        </span>
+        <span class={["text-[12px] tnum", @over && "text-status-error"]}>
+          {format_meter(@used, @cap)}{if @unit != "", do: " " <> @unit}
+        </span>
+      </div>
+      <span class="block mt-1.5 h-1 w-full bg-surface-3 rounded-sm overflow-hidden">
+        <span
+          class={["block h-full", @over && "bg-status-error", !@over && "bg-accent"]}
+          style={"width: #{round(@pct * 100)}%"}
+        />
+      </span>
+    </div>
+    """
+  end
+
+  defp format_meter(used, cap) when is_number(used) and is_number(cap) do
+    "#{:erlang.float_to_binary(used * 1.0, decimals: 1)} / #{:erlang.float_to_binary(cap * 1.0, decimals: 0)}"
+  end
+
+  defp format_meter(used, _) when is_number(used),
+    do: :erlang.float_to_binary(used * 1.0, decimals: 1)
+
+  defp format_meter(_, _), do: "—"
+
+  defp format_score(score) when is_number(score),
+    do: :erlang.float_to_binary(score * 1.0, decimals: 2)
+
+  defp format_score(_), do: "—"
+
+  defp format_price_plain(nil), do: "—"
+
+  defp format_price_plain(%Decimal{} = price) do
     price
     |> Decimal.round(0)
     |> Decimal.to_string()
     |> String.reverse()
     |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
     |> String.reverse()
-    |> Kernel.<>(" ISK")
   end
 
-  defp format_price(price) when is_number(price) do
-    format_price(Decimal.new(round(price)))
+  defp format_price_plain(price) when is_number(price) do
+    format_price_plain(Decimal.new(round(price)))
   end
 
-  defp format_price(_), do: "N/A"
-
-  defp error_to_string(:too_large), do: "File is too large (max 100KB)"
-  defp error_to_string(:too_many_files), do: "Only one file allowed"
-  defp error_to_string(:not_accepted), do: "Invalid file type. Use .txt or .eft files"
-  defp error_to_string(err), do: "Upload error: #{inspect(err)}"
-
-  defp format_elapsed(nil), do: "0.0s"
-
-  defp format_elapsed(ms) when is_integer(ms) do
-    seconds = ms / 1000
-
-    if seconds < 60 do
-      "#{Float.round(seconds, 1)}s"
-    else
-      minutes = div(ms, 60_000)
-      remaining_seconds = rem(ms, 60_000) / 1000
-      "#{minutes}m #{Float.round(remaining_seconds, 1)}s"
-    end
-  end
+  defp format_price_plain(_), do: "—"
 end

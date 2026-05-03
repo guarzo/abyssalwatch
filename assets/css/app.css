@@ -888,6 +888,42 @@
     line-height: 1.55;
     color: var(--ink-3);
   }
+
+  /* Right-side drawer for watch edit/new forms */
+  .drawer {
+    position: fixed;
+    top: 48px;
+    right: 0;
+    bottom: 0;
+    width: min(420px, 100vw);
+    background: var(--surface-1);
+    border-left: 1px solid var(--rule-1);
+    z-index: 40;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--rule-1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .drawer-body { flex: 1; padding: 16px; overflow-y: auto; }
+  .drawer-footer {
+    padding: 16px;
+    border-top: 1px solid var(--rule-1);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .drawer-scrim {
+    position: fixed;
+    inset: 48px 0 0 0;
+    background: var(--surface-overlay);
+    z-index: 39;
+  }
 }
 
 /* ─── LiveView interaction hooks ───────────────────────────────────── */

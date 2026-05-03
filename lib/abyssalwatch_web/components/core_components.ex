@@ -1,30 +1,11 @@
 defmodule AbyssalwatchWeb.CoreComponents do
   @moduledoc """
-  Provides core UI components.
+  Core UI components for AbyssalWatch.
 
-  At first glance, this module may seem daunting, but its goal is to provide
-  core building blocks for your application, such as tables, forms, and
-  inputs. The components consist mostly of markup and are well-documented
-  with doc strings and declarative assigns. You may customize and style
-  them in any way you want, based on your application growth and needs.
-
-  The foundation for styling is Tailwind CSS, a utility-first CSS framework,
-  augmented with daisyUI, a Tailwind CSS plugin that provides UI components
-  and themes. Here are useful references:
-
-    * [daisyUI](https://daisyui.com/docs/intro/) - a good place to get
-      started and see the available components.
-
-    * [Tailwind CSS](https://tailwindcss.com) - the foundational framework
-      we build on. You will use it for layout, sizing, flexbox, grid, and
-      spacing.
-
-    * [Heroicons](https://heroicons.com) - see `icon/1` for usage.
-
-    * [Phoenix.Component](https://hexdocs.pm/phoenix_live_view/Phoenix.Component.html) -
-      the component system used by Phoenix. Some components, such as `<.link>`
-      and `<.form>`, are defined there.
-
+  Built on Tailwind CSS v4 and the design tokens defined in `assets/css/app.css`.
+  Reads the design system from `DESIGN.md` (Cool Slate, Restrained):
+  OKLCH neutrals, one muted-indigo accent, 1px hairline rules instead of
+  shadows, no gradients, no glass.
   """
   use Phoenix.Component
   use Gettext, backend: AbyssalwatchWeb.Gettext
@@ -32,12 +13,9 @@ defmodule AbyssalwatchWeb.CoreComponents do
   alias Phoenix.LiveView.JS
 
   @doc """
-  Renders flash notices.
-
-  ## Examples
-
-      <.flash kind={:info} flash={@flash} />
-      <.flash kind={:info} phx-mounted={show("#flash")}>Welcome Back!</.flash>
+  Renders a flash notice. The `flash` map drives the visible message; the
+  optional inner block overrides it (used for the disconnected/server-error
+  banners).
   """
   attr :id, :string, doc: "the optional id of flash container"
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
@@ -54,107 +32,76 @@ defmodule AbyssalwatchWeb.CoreComponents do
     <div
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class={[
+        "toast-item",
+        @kind == :info && "toast-info",
+        @kind == :error && "toast-error"
+      ]}
+      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       {@rest}
     >
-      <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
-      ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
-        </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
-        </button>
+      <.icon
+        name={if @kind == :error, do: "hero-exclamation-circle", else: "hero-information-circle"}
+        class="size-5 shrink-0 text-ink-3"
+      />
+      <div class="flex-1 min-w-0">
+        <p :if={@title} class="font-semibold text-ink-1 leading-tight mb-0.5">{@title}</p>
+        <p class="text-ink-2 break-words">{msg}</p>
       </div>
+      <button
+        type="button"
+        class="text-ink-3 hover:text-ink-1 transition-colors"
+        aria-label={gettext("close")}
+      >
+        <.icon name="hero-x-mark" class="size-4" />
+      </button>
     </div>
     """
   end
 
   @doc """
-  Renders a button with navigation support.
+  Renders a button or button-shaped link.
 
   ## Examples
 
-      <.button>Send!</.button>
-      <.button phx-click="go" variant="primary">Send!</.button>
-      <.button navigate={~p"/"}>Home</.button>
+      <.button>Save</.button>
+      <.button variant="primary" phx-click="confirm">Confirm</.button>
+      <.button variant="ghost" navigate={~p"/search"}>Search</.button>
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
-  attr :class, :any
-  attr :variant, :string, values: ~w(primary)
+  attr :class, :any, default: nil
+  attr :variant, :string, default: "default", values: ~w(default primary ghost danger)
+  attr :size, :string, default: "md", values: ~w(sm md lg)
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    classes = [
+      "btn",
+      assigns.size == "sm" && "btn-sm",
+      assigns.size == "lg" && "btn-lg",
+      assigns.variant == "primary" && "btn-primary",
+      assigns.variant == "ghost" && "btn-ghost",
+      assigns.variant == "danger" && "btn-danger",
+      assigns.class
+    ]
 
-    assigns =
-      assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
-      end)
+    assigns = assign(assigns, :class, classes)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
-      <.link class={@class} {@rest}>
-        {render_slot(@inner_block)}
-      </.link>
+      <.link class={@class} {@rest}>{render_slot(@inner_block)}</.link>
       """
     else
       ~H"""
-      <button class={@class} {@rest}>
-        {render_slot(@inner_block)}
-      </button>
+      <button class={@class} {@rest}>{render_slot(@inner_block)}</button>
       """
     end
   end
 
   @doc """
-  Renders an input with label and error messages.
-
-  A `Phoenix.HTML.FormField` may be passed as argument,
-  which is used to retrieve the input name, id, and values.
-  Otherwise all attributes may be passed explicitly.
-
-  ## Types
-
-  This function accepts all HTML input types, considering that:
-
-    * You may also set `type="select"` to render a `<select>` tag
-
-    * `type="checkbox"` is used exclusively to render boolean values
-
-    * For live file uploads, see `Phoenix.Component.live_file_input/1`
-
-  See https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input
-  for more information. Unsupported types, such as radio, are best
-  written directly in your templates.
-
-  ## Examples
-
-  ```heex
-  <.input field={@form[:email]} type="email" />
-  <.input name="my-input" errors={["oh no!"]} />
-  ```
-
-  ## Select type
-
-  When using `type="select"`, you must pass the `options` and optionally
-  a `value` to mark which option should be preselected.
-
-  ```heex
-  <.input field={@form[:user_type]} type="select" options={["Admin": "admin", "User": "user"]} />
-  ```
-
-  For more information on what kind of data can be passed to `options` see
-  [`options_for_select`](https://hexdocs.pm/phoenix_html/Phoenix.HTML.Form.html#options_for_select/2).
+  Renders an input with label and error messages. Compatible with
+  `Phoenix.HTML.FormField` via `<.input field={@form[:email]} />`.
   """
   attr :id, :any, default: nil
   attr :name, :any
@@ -205,8 +152,8 @@ defmodule AbyssalwatchWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
+    <div class="field">
+      <label class="flex items-center gap-2 text-ink-2 text-sm cursor-pointer">
         <input
           type="hidden"
           name={@name}
@@ -214,17 +161,16 @@ defmodule AbyssalwatchWeb.CoreComponents do
           disabled={@rest[:disabled]}
           form={@rest[:form]}
         />
-        <span class="label">
-          <input
-            type="checkbox"
-            id={@id}
-            name={@name}
-            value="true"
-            checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
-            {@rest}
-          />{@label}
-        </span>
+        <input
+          type="checkbox"
+          id={@id}
+          name={@name}
+          value="true"
+          checked={@checked}
+          class={@class || "checkbox"}
+          {@rest}
+        />
+        <span :if={@label}>{@label}</span>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
@@ -233,20 +179,18 @@ defmodule AbyssalwatchWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
-        <select
-          id={@id}
-          name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
-          multiple={@multiple}
-          {@rest}
-        >
-          <option :if={@prompt} value="">{@prompt}</option>
-          {Phoenix.HTML.Form.options_for_select(@options, @value)}
-        </select>
-      </label>
+    <div class="field">
+      <span :if={@label} class="field-label">{@label}</span>
+      <select
+        id={@id}
+        name={@name}
+        class={[@class || "select", @errors != [] && (@error_class || "select-error")]}
+        multiple={@multiple}
+        {@rest}
+      >
+        <option :if={@prompt} value="">{@prompt}</option>
+        {Phoenix.HTML.Form.options_for_select(@options, @value)}
+      </select>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
@@ -254,94 +198,82 @@ defmodule AbyssalwatchWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
-        <textarea
-          id={@id}
-          name={@name}
-          class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
-          ]}
-          {@rest}
-        >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
-      </label>
+    <div class="field">
+      <span :if={@label} class="field-label">{@label}</span>
+      <textarea
+        id={@id}
+        name={@name}
+        class={[@class || "textarea", @errors != [] && (@error_class || "textarea-error")]}
+        {@rest}
+      >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
   end
 
-  # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
-      <label>
-        <span :if={@label} class="label mb-1">{@label}</span>
-        <input
-          type={@type}
-          name={@name}
-          id={@id}
-          value={Phoenix.HTML.Form.normalize_value(@type, @value)}
-          class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
-          ]}
-          {@rest}
-        />
-      </label>
+    <div class="field">
+      <span :if={@label} class="field-label">{@label}</span>
+      <input
+        type={@type}
+        name={@name}
+        id={@id}
+        value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+        class={[@class || "input", @errors != [] && (@error_class || "input-error")]}
+        {@rest}
+      />
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
   end
 
-  # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
-      <.icon name="hero-exclamation-circle" class="size-5" />
-      {render_slot(@inner_block)}
+    <p class="field-error">
+      <.icon name="hero-exclamation-circle" class="size-4 shrink-0" />
+      <span>{render_slot(@inner_block)}</span>
     </p>
     """
   end
 
   @doc """
-  Renders a header with title.
+  Renders a page or section header with optional subtitle and action slot.
   """
+  attr :class, :any, default: nil
   slot :inner_block, required: true
   slot :subtitle
   slot :actions
 
   def header(assigns) do
     ~H"""
-    <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4"]}>
-      <div>
-        <h1 class="text-lg font-semibold leading-8">
+    <header class={[
+      "flex items-end justify-between gap-6 pb-5 mb-6 border-b border-rule-1",
+      @class
+    ]}>
+      <div class="min-w-0">
+        <h1 class="text-[22px] leading-[30px] font-semibold text-ink-1 tracking-tight">
           {render_slot(@inner_block)}
         </h1>
-        <p :if={@subtitle != []} class="text-sm text-base-content/70">
+        <p :if={@subtitle != []} class="mt-1 text-[13px] text-ink-3">
           {render_slot(@subtitle)}
         </p>
       </div>
-      <div class="flex-none">{render_slot(@actions)}</div>
+      <div :if={@actions != []} class="flex-none flex items-center gap-2">
+        {render_slot(@actions)}
+      </div>
     </header>
     """
   end
 
   @doc """
-  Renders a table with generic styling.
-
-  ## Examples
-
-      <.table id="users" rows={@users}>
-        <:col :let={user} label="id">{user.id}</:col>
-        <:col :let={user} label="username">{user.username}</:col>
-      </.table>
+  Renders a dense data table. Hairline rules between rows, sticky surface-2
+  header, hover surface-2, selected row gets an inset accent rail.
   """
   attr :id, :string, required: true
   attr :rows, :list, required: true
-  attr :row_id, :any, default: nil, doc: "the function for generating the row id"
-  attr :row_click, :any, default: nil, doc: "the function for handling phx-click on each row"
+  attr :row_id, :any, default: nil
+  attr :row_click, :any, default: nil
 
   attr :row_item, :any,
     default: &Function.identity/1,
@@ -349,9 +281,11 @@ defmodule AbyssalwatchWeb.CoreComponents do
 
   slot :col, required: true do
     attr :label, :string
+    attr :class, :any
+    attr :align, :string
   end
 
-  slot :action, doc: "the slot for showing user actions in the last table column"
+  slot :action
 
   def table(assigns) do
     assigns =
@@ -360,46 +294,53 @@ defmodule AbyssalwatchWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
-      <thead>
-        <tr>
-          <th :for={col <- @col}>{col[:label]}</th>
-          <th :if={@action != []}>
-            <span class="sr-only">{gettext("Actions")}</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
-        <tr :for={row <- @rows} id={@row_id && @row_id.(row)}>
-          <td
-            :for={col <- @col}
-            phx-click={@row_click && @row_click.(row)}
-            class={@row_click && "hover:cursor-pointer"}
-          >
-            {render_slot(col, @row_item.(row))}
-          </td>
-          <td :if={@action != []} class="w-0 font-semibold">
-            <div class="flex gap-4">
-              <%= for action <- @action do %>
-                {render_slot(action, @row_item.(row))}
-              <% end %>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="panel overflow-hidden">
+      <table class="dense">
+        <thead>
+          <tr>
+            <th
+              :for={col <- @col}
+              class={[
+                col[:align] == "right" && "text-right",
+                col[:align] == "center" && "text-center"
+              ]}
+            >
+              {col[:label]}
+            </th>
+            <th :if={@action != []} class="text-right">
+              <span class="sr-only">{gettext("Actions")}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
+          <tr :for={row <- @rows} id={@row_id && @row_id.(row)} class={@row_click && "cursor-pointer"}>
+            <td
+              :for={col <- @col}
+              phx-click={@row_click && @row_click.(row)}
+              class={[
+                col[:class],
+                col[:align] == "right" && "text-right",
+                col[:align] == "center" && "text-center"
+              ]}
+            >
+              {render_slot(col, @row_item.(row))}
+            </td>
+            <td :if={@action != []} class="text-right">
+              <div class="flex justify-end gap-3">
+                <%= for action <- @action do %>
+                  {render_slot(action, @row_item.(row))}
+                <% end %>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     """
   end
 
   @doc """
-  Renders a data list.
-
-  ## Examples
-
-      <.list>
-        <:item title="Title">{@post.title}</:item>
-        <:item title="Views">{@post.views}</:item>
-      </.list>
+  Renders a definition list of label/value pairs.
   """
   slot :item, required: true do
     attr :title, :string, required: true
@@ -407,34 +348,58 @@ defmodule AbyssalwatchWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <ul class="list">
-      <li :for={item <- @item} class="list-row">
-        <div class="list-col-grow">
-          <div class="font-bold">{item.title}</div>
-          <div>{render_slot(item)}</div>
-        </div>
-      </li>
-    </ul>
+    <dl class="divide-y divide-rule-1 border-y border-rule-1">
+      <div
+        :for={item <- @item}
+        class="grid grid-cols-[160px_1fr] gap-4 px-4 py-3 hover:bg-surface-2"
+      >
+        <dt class="text-[12px] uppercase tracking-wider text-ink-3 font-medium">
+          {item.title}
+        </dt>
+        <dd class="text-ink-1 text-sm tnum">{render_slot(item)}</dd>
+      </div>
+    </dl>
     """
   end
 
   @doc """
-  Renders a [Heroicon](https://heroicons.com).
-
-  Heroicons come in three styles – outline, solid, and mini.
-  By default, the outline style is used, but solid and mini may
-  be applied by using the `-solid` and `-mini` suffix.
-
-  You can customize the size and colors of the icons by setting
-  width, height, and background color classes.
-
-  Icons are extracted from the `deps/heroicons` directory and bundled within
-  your compiled app.css by the plugin in `assets/vendor/heroicons.js`.
+  Renders a status pill. Always shows shape glyph + label, never color alone.
 
   ## Examples
 
-      <.icon name="hero-x-mark" />
-      <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
+      <.status state={:ready}>Ready</.status>
+      <.status state={:queued}>Queued · 4</.status>
+  """
+  attr :state, :atom,
+    required: true,
+    values: [:ready, :training, :queued, :idle, :error]
+
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+
+  def status(assigns) do
+    glyph =
+      case assigns.state do
+        :ready -> "●"
+        :training -> "◐"
+        :queued -> "▸"
+        :idle -> "○"
+        :error -> "!"
+      end
+
+    assigns = assign(assigns, :glyph, glyph)
+
+    ~H"""
+    <span class={["pill", "pill-#{@state}", @class]}>
+      <span class="pill-glyph" aria-hidden="true">{@glyph}</span>
+      <span>{render_slot(@inner_block)}</span>
+    </span>
+    """
+  end
+
+  @doc """
+  Renders a Heroicon as a CSS-mask-driven span. The icon name follows the
+  `hero-{name}` convention; size and color are set with utility classes.
   """
   attr :name, :string, required: true
   attr :class, :any, default: "size-4"
@@ -445,43 +410,32 @@ defmodule AbyssalwatchWeb.CoreComponents do
     """
   end
 
-  ## JS Commands
+  ## JS commands ────────────────────────────────────────────────────────
 
   def show(js \\ %JS{}, selector) do
     JS.show(js,
       to: selector,
-      time: 300,
+      time: 180,
       transition:
-        {"transition-all ease-out duration-300",
-         "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95",
-         "opacity-100 translate-y-0 sm:scale-100"}
+        {"transition-all ease-out duration-180", "opacity-0 translate-y-1",
+         "opacity-100 translate-y-0"}
     )
   end
 
   def hide(js \\ %JS{}, selector) do
     JS.hide(js,
       to: selector,
-      time: 200,
+      time: 120,
       transition:
-        {"transition-all ease-in duration-200", "opacity-100 translate-y-0 sm:scale-100",
-         "opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"}
+        {"transition-all ease-out duration-120", "opacity-100 translate-y-0",
+         "opacity-0 translate-y-1"}
     )
   end
 
-  @doc """
-  Translates an error message using gettext.
-  """
+  ## Gettext helpers ────────────────────────────────────────────────────
+
+  @doc "Translates an error message using gettext."
   def translate_error({msg, opts}) do
-    # When using gettext, we typically pass the strings we want
-    # to translate as a static argument:
-    #
-    #     # Translate the number of files with plural rules
-    #     dngettext("errors", "1 file", "%{count} files", count)
-    #
-    # However the error messages in our forms and APIs are generated
-    # dynamically, so we need to translate them by calling Gettext
-    # with our gettext backend as first argument. Translations are
-    # available in the errors.po file (as we use the "errors" domain).
     if count = opts[:count] do
       Gettext.dngettext(AbyssalwatchWeb.Gettext, "errors", msg, msg, count, opts)
     else
@@ -489,9 +443,7 @@ defmodule AbyssalwatchWeb.CoreComponents do
     end
   end
 
-  @doc """
-  Translates the errors for a field from a keyword list of errors.
-  """
+  @doc "Translates the errors for a field from a keyword list of errors."
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end

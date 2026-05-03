@@ -7150,3 +7150,231 @@
  color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
 [ 2393325ms] [INFO] %c📡 [info] Watchlist check completed in 24ms
  color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2862113ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2862122ms] [INFO] %c📡 [info] Sent 200 in 23ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2862131ms] [LOG] phx-GKv8bIsca7uL71RH error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 2862664ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 36µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "DhpZeTJWFRwEDiUkLAZbNSA8BT8wCyIcXj4-Qedp79HRB26GWdBsznPY", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2862890ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 42µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "LBopA2N8OGIaISQmVgJ6FjgIPR9sWxxdMQhKP-u1BynNnXMwJbDQ-lIo", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4001/assets/css/app.css", "1" => "http://localhost:4001/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2863132ms] [LOG] phx-GKv9fwJEnbBRO3KH mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 2907180ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2907203ms] [INFO] %c📡 [info] Sent 200 in 23ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2907218ms] [LOG] phx-GKv9fwJEnbBRO3KH error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 2907742ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 49µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "FV0-Ihl0IwpGTwpPXXxfHxAxMnwzAgodC-SvzGRfuxg93H2mgiu0ygxX", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2908015ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 57µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "Fn4HfAsZNzoaMRs4dQ9HIho9EBkjWDdTw5F48HziBiQPMUpChWiWboba", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4001/assets/css/app.css", "1" => "http://localhost:4001/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2908243ms] [LOG] phx-GKv9iS9MHDgGn4-H mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 2914805ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2914821ms] [INFO] %c📡 [info] Sent 200 in 30ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2914830ms] [LOG] phx-GKv9iS9MHDgGn4-H error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 2918736ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 31µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "KSg0AmkhITEVaHgxDhhEEwU7QREnRmJ5HcuJZplbM02Y6BsrwQ8_fq7K", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4001/assets/css/app.css", "1" => "http://localhost:4001/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2918926ms] [LOG] phx-GKv9ivUU1UvKVZ3I mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 2929406ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2929418ms] [INFO] %c📡 [info] Sent 200 in 29ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2929422ms] [LOG] phx-GKv9ivUU1UvKVZ3I error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 2929963ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 52µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "FSQbBCljIVhVXlwvO15ZHBMQdBUCFAggCTvPJPP4fi1YUj4ndH3YHqze", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2930251ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 43µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "DAMnZWoYfREALh8lTjddADMrNhkzUxxRmHf-YI0BXvUMvmjaAAOWrdIc", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4001/assets/css/app.css", "1" => "http://localhost:4001/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2930526ms] [LOG] phx-GKv9jq0yJyjKVZAG mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 2935385ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2935409ms] [INFO] %c📡 [info] Sent 200 in 36ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2935429ms] [LOG] phx-GKv9jq0yJyjKVZAG error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 2936044ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 33µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "PUI4JgVcNBZjf1sTNnkLISIgdj0GUTwJk2UrfoEzPH6eXMfSUx1qL4NL", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2936455ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 52µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "BX0LMmFoeCsgaQtebS5bMhYoTw8FaAZZd6JzR95xx1A6UtlSdB6AD_Sk", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4001/assets/css/app.css", "1" => "http://localhost:4001/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2936713ms] [LOG] phx-GKv9j-Y9d9fOKaNH mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 2981034ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981034ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981052ms] [INFO] %c📡 [info] Sent 200 in 29ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981052ms] [INFO] %c📡 [info] Sent 200 in 28ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981318ms] [INFO] %c📡 [info] GET /optimize
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981318ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981337ms] [INFO] %c📡 [info] Sent 200 in 31ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981337ms] [INFO] %c📡 [info] Sent 200 in 32ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2981351ms] [LOG] phx-GKv9j-Y9d9fOKaNH error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 2982209ms] [LOG] phx-GKv9msPm-gVA4sgE mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 2993601ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2993621ms] [INFO] %c📡 [info] Sent 200 in 34ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2993633ms] [LOG] phx-GKv9msPm-gVA4sgE error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 2994123ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 25µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "CTomERQCG1oLfDkQVwwFCjE6Iw0DMiR1_JKEw1j68KTf98hxFbdAIWV0", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2994393ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 30µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "VDgJD3QLOioXbHsnewBTNUEvHhcAQWdf5sHGGZwyO41OCZdT3EgYAv2m", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4001/assets/css/app.css", "1" => "http://localhost:4001/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 2994627ms] [LOG] phx-GKv9nZ9-ab9A4sfI mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3009640ms] [INFO] %c📡 [info] Starting watchlist check...
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3009661ms] [INFO] %c📡 [info] Found 0 active watchlists
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3009661ms] [INFO] %c📡 [info] Watchlist check completed in 33ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3395428ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3395444ms] [INFO] %c📡 [info] Sent 200 in 26ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3395453ms] [LOG] phx-GKv9nZ9-ab9A4sfI error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3395965ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 46µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "NSEjLA9AFh0LfA8hImMmRw8tDD56U0M8cQNxlsgq8KbWLWK5xuKr061y", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3396273ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 54µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "DwQUC1oACTI0Eh4eeRZWUwY7PQsGYx9InOUCiQDalJTvALa2tQDEGTJz", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4001/assets/css/app.css", "1" => "http://localhost:4001/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3396528ms] [LOG] phx-GKv9-uNy54H2AsiF mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3400732ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3400742ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3400754ms] [LOG] phx-GKv9-uNy54H2AsiF error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3401726ms] [LOG] phx-GKv9_B-S3AiflrHH mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3405557ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3405573ms] [INFO] %c📡 [info] Sent 200 in 35ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3405587ms] [LOG] phx-GKv9_B-S3AiflrHH error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3406118ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 20µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "AEccbBR5Fjh3dR0_GVkqKz0cBj17IxdyV7q8wJgTDBpIwmGYJDAq1Fe7", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3406566ms] [LOG] phx-GKv9_T7PmpuflpZB mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3411200ms] [LOG] phx-GKv9_T7PmpuflpZB error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3411204ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/search?type_id=49726:0
+[ 3424377ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/search?type_id=49726:0
+[ 3437257ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/search?type_id=49726:0
+[ 3454135ms] [INFO] %c📡 [info] CONNECTED TO Phoenix.LiveView.Socket in 20µs
+  Transport: :longpoll
+  Serializer: Phoenix.Socket.V2.JSONSerializer
+  Parameters: %{"_csrf_token" => "ASo9Bi1mOl10TzgMWwAaGBAfKQAGEwh3WZPRNUK1GxUz54wjgGnLLvz2", "_live_referer" => "undefined", "_mount_attempts" => "0", "_mounts" => "0", "_track_static" => %{"0" => "http://localhost:4000/assets/css/app.css", "1" => "http://localhost:4000/assets/js/app.js"}, "vsn" => "2.0.0"}
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3454635ms] [LOG] phx-GKv-CJRz8P--awyE mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3462166ms] [LOG] phx-GKv-CJRz8P--awyE error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3462170ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/search?type_id=49726:0
+[ 3471855ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/search?type_id=49726:0
+[ 3486850ms] [LOG] phx-GKv-ED1nJLS-a6PB mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3491089ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3491104ms] [INFO] %c📡 [info] Sent 200 in 23ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3491116ms] [LOG] phx-GKv-ED1nJLS-a6PB error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3493054ms] [LOG] phx-GKv-EXRo-tS-a6fB mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3503116ms] [LOG] phx-GKv-EXRo-tS-a6fB error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3503121ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/search?type_id=49726:0
+[ 3511227ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/search?type_id=49726:0
+[ 3526119ms] [LOG] phx-GKv-GSCPAYC-az1E mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3538609ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3538626ms] [INFO] %c📡 [info] Sent 200 in 32ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3538638ms] [LOG] phx-GKv-GSCPAYC-az1E error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3539344ms] [LOG] phx-GKv-HITzBa2-az6E mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863
+[ 3554886ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3554903ms] [INFO] %c📡 [info] Sent 200 in 30ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555107ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555108ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555109ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555109ms] [INFO] %c📡 [info] GET /search
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555120ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555120ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555120ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555121ms] [INFO] %c📡 [info] Sent 200 in 25ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555121ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555122ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555122ms] [INFO] %c📡 [info] Sent 200 in 23ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555122ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555122ms] [INFO] %c📡 [info] Sent 200 in 23ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555122ms] [INFO] %c📡 [info] Sent 200 in 24ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555122ms] [INFO] %c📡 [info] Sent 200 in 25ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[ 3555130ms] [LOG] phx-GKv-HITzBa2-az6E error: view crashed -  undefined @ http://localhost:4000/assets/js/app.js:1863
+[ 3555989ms] [LOG] phx-GKv-IFw4cpAzXyWC mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 26} @ http://localhost:4000/assets/js/app.js:1863

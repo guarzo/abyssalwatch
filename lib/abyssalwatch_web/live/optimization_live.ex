@@ -6,7 +6,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   the included module types from the fit, and the sidebar tunes constraints,
   objectives, and solver mode. Optimize fills the slots; the solutions table
   ranks results, and the selected detail panel shows the slot-by-slot
-  assignment with a Δ score against the pilot's current modules.
+  assignment.
 
   See DESIGN.md and PRODUCT.md for the visual language.
   """
@@ -41,13 +41,14 @@ defmodule AbyssalwatchWeb.OptimizationLive do
      |> assign(:optimization_start_time, nil)
      |> assign(:optimization_elapsed, 0)
      |> assign(:optimization_error, nil)
+     |> assign(:optimization_timer_ref, nil)
      |> assign(:solutions, [])
      |> assign(:selected_solution, nil)
      |> assign(:expanded_module_id, nil)
      |> assign(:copy_state, :idle)
      |> assign(:confirming_clear, false)
      |> allow_upload(:eft_file,
-       accept: ~w(.txt),
+       accept: ~w(.txt .eft),
        max_entries: 1,
        max_file_size: 100_000
      )}
@@ -185,6 +186,9 @@ defmodule AbyssalwatchWeb.OptimizationLive do
         {:noreply, put_flash(socket, :error, "Include at least one module type to optimize")}
 
       true ->
+        cancel_optimization_timer(socket.assigns[:optimization_timer_ref])
+        {:ok, timer_ref} = :timer.send_interval(120, self(), :optimization_tick)
+
         socket =
           socket
           |> assign(:loading_modules, true)
@@ -192,8 +196,8 @@ defmodule AbyssalwatchWeb.OptimizationLive do
           |> assign(:optimization_error, nil)
           |> assign(:optimization_start_time, System.monotonic_time(:millisecond))
           |> assign(:optimization_elapsed, 0)
+          |> assign(:optimization_timer_ref, timer_ref)
 
-        :timer.send_interval(120, self(), :optimization_tick)
         send(self(), :load_candidates)
         {:noreply, socket}
     end
@@ -203,11 +207,14 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   def handle_event("cancel_optimize", _params, socket) do
     # UI-side cancel: hide running state. The underlying solver continues
     # but its result is discarded by ignoring late :optimization_done sends.
+    cancel_optimization_timer(socket.assigns[:optimization_timer_ref])
+
     {:noreply,
      socket
      |> assign(:loading_modules, false)
      |> assign(:optimizing, false)
-     |> assign(:optimization_elapsed, 0)}
+     |> assign(:optimization_elapsed, 0)
+     |> assign(:optimization_timer_ref, nil)}
   end
 
   @impl true
@@ -325,23 +332,29 @@ defmodule AbyssalwatchWeb.OptimizationLive do
          ) do
       {:ok, %{solutions: solutions}} ->
         if socket.assigns.optimizing do
+          cancel_optimization_timer(socket.assigns[:optimization_timer_ref])
+
           {:noreply,
            socket
            |> assign(:solutions, solutions)
            |> assign(:selected_solution, List.first(solutions))
            |> assign(:optimizing, false)
-           |> assign(:optimization_elapsed, 0)}
+           |> assign(:optimization_elapsed, 0)
+           |> assign(:optimization_timer_ref, nil)}
         else
           # Cancelled UI-side; discard.
           {:noreply, socket}
         end
 
       {:error, reason} ->
+        cancel_optimization_timer(socket.assigns[:optimization_timer_ref])
+
         {:noreply,
          socket
          |> assign(:optimization_error, format_solver_error(reason))
          |> assign(:optimizing, false)
-         |> assign(:optimization_elapsed, 0)}
+         |> assign(:optimization_elapsed, 0)
+         |> assign(:optimization_timer_ref, nil)}
     end
   end
 
@@ -379,7 +392,16 @@ defmodule AbyssalwatchWeb.OptimizationLive do
         {:noreply, assign(socket, :included_type_ids, included)}
 
       {:error, reason} ->
-        {:noreply, assign(socket, :eft_error, to_string(reason))}
+        {:noreply,
+         socket
+         |> assign(:fitting, nil)
+         |> assign(:eft_error, to_string(reason))
+         |> assign(:included_type_ids, [])
+         |> assign(:solutions, [])
+         |> assign(:selected_solution, nil)
+         |> assign(:expanded_module_id, nil)
+         |> assign(:optimization_error, nil)
+         |> assign(:confirming_clear, false)}
     end
   end
 
@@ -439,6 +461,15 @@ defmodule AbyssalwatchWeb.OptimizationLive do
       calibration_capacity: 400.0,
       available_slots: %{high: 4, med: 4, low: 4, rig: 3}
     })
+  end
+
+  defp cancel_optimization_timer(nil), do: :ok
+  defp cancel_optimization_timer(ref), do: :timer.cancel(ref)
+
+  @impl true
+  def terminate(_reason, socket) do
+    cancel_optimization_timer(socket.assigns[:optimization_timer_ref])
+    :ok
   end
 
   defp derive_types_from_fit(%{fitting: nil}), do: []
@@ -626,11 +657,10 @@ defmodule AbyssalwatchWeb.OptimizationLive do
       <div class="panel">
         <div class="px-5 py-3 flex items-center justify-between gap-4">
           <div class="flex items-baseline gap-3 min-w-0">
-            <span class="text-ink-3 text-[12px]" aria-hidden="true">▸</span>
             <span class="text-ink-1 font-medium truncate">{@fitting.ship_type}</span>
             <span class="text-ink-3 text-[13px] truncate">· {@fitting.name}</span>
             <span class="text-ink-4 text-[12px] tnum shrink-0">
-              · {@abyssal_count} fitted {pluralize(@abyssal_count, "slot", "slots")}
+              · {@abyssal_count} abyssal {pluralize(@abyssal_count, "slot", "slots")}
             </span>
           </div>
           <div class="flex items-center gap-2">
@@ -907,8 +937,8 @@ defmodule AbyssalwatchWeb.OptimizationLive do
           </div>
           <p class="mt-1.5 text-[11px] text-ink-4 leading-snug">
             {if @solver_mode == :heuristic,
-              do: "Greedy fill, sub-second.",
-              else: "Branch-and-bound, exhaustive."}
+              do: "Picks first viable fit.",
+              else: "Searches all combinations."}
           </p>
         </details>
 
@@ -928,7 +958,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
             </span>
           </summary>
           <p class="text-[11px] text-ink-4 leading-snug">
-            Auto from fit.
+            Included types match your fit's slots.
             <button
               type="button"
               phx-click="toggle_types_popover"
@@ -1299,7 +1329,6 @@ defmodule AbyssalwatchWeb.OptimizationLive do
             <th class="w-6"></th>
             <th>#</th>
             <th class="text-right">Score</th>
-            <th class="text-right">Δ score</th>
             <th class="text-right">Cost (ISK)</th>
           </tr>
         </thead>
@@ -1308,9 +1337,6 @@ defmodule AbyssalwatchWeb.OptimizationLive do
             <tr>
               <td></td>
               <td><span class="block h-3 w-6 bg-surface-2 rounded" /></td>
-              <td class="text-right">
-                <span class="block h-3 w-12 bg-surface-2 rounded ml-auto" />
-              </td>
               <td class="text-right">
                 <span class="block h-3 w-12 bg-surface-2 rounded ml-auto" />
               </td>
@@ -1332,72 +1358,69 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   defp solutions_table(assigns) do
     ~H"""
     <div class="panel overflow-hidden">
-      <table class="dense">
+      <table class="dense" id="solutions-table" phx-hook=".SolutionsKeyNav" tabindex="0">
         <thead>
           <tr>
             <th class="w-6" aria-hidden="true"></th>
             <th class="w-12">#</th>
             <th class="text-right">Score</th>
-            <th class="text-right">Δ score</th>
             <th class="text-right">Cost (ISK)</th>
           </tr>
         </thead>
         <tbody>
           <%= for {solution, idx} <- Enum.with_index(@solutions) do %>
             <% is_top = idx == 0
-            is_selected = @selected_solution && @selected_solution.id == solution.id
-            delta = score_delta(solution, @fitting) %>
+            is_selected = @selected_solution && @selected_solution.id == solution.id %>
             <tr
               id={"solution-#{idx}"}
               phx-click="select_solution"
               phx-value-index={idx}
+              data-index={idx}
               class={[
                 "cursor-pointer",
                 is_selected && "is-selected"
               ]}
             >
               <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
-                {if is_top, do: "★", else: ""}
+                {if is_top, do: "●", else: ""}
               </td>
               <td class="text-ink-2 tnum">{solution.rank || idx + 1}</td>
               <td class="text-right">
                 <span class="tnum text-ink-1">{format_score(solution.total_score)}</span>
-              </td>
-              <td class="text-right tnum">
-                {delta_label(delta)}
               </td>
               <td class="text-right tnum">{format_price_plain(solution.total_price)}</td>
             </tr>
           <% end %>
         </tbody>
       </table>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".SolutionsKeyNav">
+        export default {
+          mounted() {
+            this.idx = 0
+            this.handler = (e) => {
+              if (e.target.matches("input, textarea, [contenteditable]")) return
+              const rows = this.el.querySelectorAll("tbody tr[data-index]")
+              if (rows.length === 0) return
+              let next = null
+              if (e.key === "j" || e.key === "ArrowDown") next = Math.min(this.idx + 1, rows.length - 1)
+              else if (e.key === "k" || e.key === "ArrowUp") next = Math.max(this.idx - 1, 0)
+              else return
+              e.preventDefault()
+              this.idx = next
+              const row = rows[next]
+              this.pushEvent("select_solution", { index: String(next) })
+              row.scrollIntoView({ block: "nearest" })
+            }
+            window.addEventListener("keydown", this.handler)
+          },
+          destroyed() {
+            window.removeEventListener("keydown", this.handler)
+          }
+        }
+      </script>
     </div>
     """
   end
-
-  defp score_delta(_solution, _fitting) do
-    # Pilots' input fits rarely contain abyssal modules in the relevant
-    # slots, so a baseline isn't available yet. Render n/a.
-    nil
-  end
-
-  defp delta_label(nil),
-    do:
-      Phoenix.HTML.raw(
-        "<span class=\"text-ink-4\" title=\"No abyssal baseline in source fit\">n/a</span>"
-      )
-
-  defp delta_label(delta) when delta >= 0,
-    do:
-      Phoenix.HTML.raw(
-        "<span class=\"text-ink-1\"><span aria-hidden=\"true\">▴ </span>+#{format_score(delta)}</span>"
-      )
-
-  defp delta_label(delta),
-    do:
-      Phoenix.HTML.raw(
-        "<span class=\"text-status-error\"><span aria-hidden=\"true\">▾ </span>#{format_score(delta)}</span>"
-      )
 
   attr :solution, :any, required: true
   attr :constraints, :map, required: true
@@ -1515,8 +1538,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
             rel="noopener noreferrer"
             class="inline-flex items-center gap-1 text-accent hover:underline"
           >
-            <.icon name="hero-arrow-top-right-on-square" class="size-3" />
-            View on Mutamarket
+            <.icon name="hero-arrow-top-right-on-square" class="size-3" /> View on Mutamarket
           </a>
         <% end %>
         <span class="text-ink-3 font-mono">id: {@mod.external_id}</span>
@@ -1599,7 +1621,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
         <span class="flex items-baseline gap-1.5">
           <span
             :if={@over}
-            class="text-[10px] uppercase tracking-wider text-status-error font-semibold"
+            class="text-[10px] uppercase tracking-wider text-ink-3 font-medium"
             aria-label="over capacity"
           >
             ! Over

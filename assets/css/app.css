@@ -482,8 +482,8 @@
     scrollbar-width: none;
   }
   .topbar-nav::-webkit-scrollbar { display: none; }
-  .topbar-nav-link { flex-shrink: 0; }
   .topbar-nav-link {
+    flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     height: 32px;

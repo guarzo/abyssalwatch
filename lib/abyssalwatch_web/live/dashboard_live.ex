@@ -202,17 +202,17 @@ defmodule AbyssalwatchWeb.DashboardLive do
       <% @unread_count == 0 and @active_watchlist_count == 0 -> %>
         Quiet so far.
       <% @unread_count == 0 -> %>
-        <span class="tnum">{@active_watchlist_count}</span> active
-        {pluralize(@active_watchlist_count, "watchlist", "watchlists")}.
+        <span class="tnum">{@active_watchlist_count}</span>
+        active {pluralize(@active_watchlist_count, "watchlist", "watchlists")}.
       <% @active_watchlist_count == 0 -> %>
-        <span class="tnum">{@unread_count}</span> unread
-        {pluralize(@unread_count, "notification", "notifications")}.
+        <span class="tnum">{@unread_count}</span>
+        unread {pluralize(@unread_count, "notification", "notifications")}.
       <% true -> %>
-        <span class="tnum">{@unread_count}</span> unread
-        {pluralize(@unread_count, "notification", "notifications")}
+        <span class="tnum">{@unread_count}</span>
+        unread {pluralize(@unread_count, "notification", "notifications")}
         <span class="text-ink-4">·</span>
-        <span class="tnum">{@active_watchlist_count}</span> active
-        {pluralize(@active_watchlist_count, "watchlist", "watchlists")}.
+        <span class="tnum">{@active_watchlist_count}</span>
+        active {pluralize(@active_watchlist_count, "watchlist", "watchlists")}.
     <% end %>
     """
   end
@@ -257,7 +257,7 @@ defmodule AbyssalwatchWeb.DashboardLive do
                   ]}
                   aria-hidden="true"
                 >
-                  <%= if n.read, do: "○", else: "●" %>
+                  {if n.read, do: "○", else: "●"}
                 </span>
                 <span class="flex-1 min-w-0">
                   <span class={[
@@ -308,7 +308,10 @@ defmodule AbyssalwatchWeb.DashboardLive do
       <%= if Enum.empty?(@watchlists) do %>
         <p class="text-[13px] text-ink-3">
           No active watchlists.
-          <.link navigate={~p"/watchlists?action=new"} class="text-ink-2 hover:text-ink-1 underline underline-offset-2 ml-1">
+          <.link
+            navigate={~p"/watchlists?action=new"}
+            class="text-ink-2 hover:text-ink-1 underline underline-offset-2 ml-1"
+          >
             Create one →
           </.link>
         </p>

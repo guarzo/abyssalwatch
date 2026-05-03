@@ -259,7 +259,13 @@ defmodule AbyssalwatchWeb.NotificationLive do
      socket
      |> assign(:notifications, notifications)
      |> assign(:unread_count, count_unread(notifications))
-     |> assign(:expanded_id, if(socket.assigns.expanded_id == notification_id, do: nil, else: socket.assigns.expanded_id))}
+     |> assign(
+       :expanded_id,
+       if(socket.assigns.expanded_id == notification_id,
+         do: nil,
+         else: socket.assigns.expanded_id
+       )
+     )}
   end
 
   @impl true
@@ -321,7 +327,10 @@ defmodule AbyssalwatchWeb.NotificationLive do
   defp count_unread(notifications), do: Enum.count(notifications, &(not &1.read))
 
   defp filtered_notifications(notifications, "all"), do: notifications
-  defp filtered_notifications(notifications, "unread"), do: Enum.filter(notifications, &(not &1.read))
+
+  defp filtered_notifications(notifications, "unread"),
+    do: Enum.filter(notifications, &(not &1.read))
+
   defp filtered_notifications(notifications, "read"), do: Enum.filter(notifications, & &1.read)
 
   defp watchlist_name(_watchlists, nil), do: nil
@@ -346,7 +355,10 @@ defmodule AbyssalwatchWeb.NotificationLive do
       |> assign(:filtered_notifications, filtered)
       |> assign(:total, total)
       |> assign(:read_count, read_count)
-      |> assign(:active_watchlist_name, watchlist_name(assigns.watchlists, assigns.watchlist_filter))
+      |> assign(
+        :active_watchlist_name,
+        watchlist_name(assigns.watchlists, assigns.watchlist_filter)
+      )
 
     ~H"""
     <div id="notifications-root" phx-window-keydown="keydown" phx-key="Escape">
@@ -359,7 +371,8 @@ defmodule AbyssalwatchWeb.NotificationLive do
             <%= if @total == 0 do %>
               No matches yet.
             <% else %>
-              <span class="tnum">{@total}</span> total
+              <span class="tnum">{@total}</span>
+              total
               <span :if={@unread_count > 0}>
                 <span class="text-ink-4">·</span>
                 <span class="tnum text-ink-2">{@unread_count}</span> unread
@@ -423,8 +436,7 @@ defmodule AbyssalwatchWeb.NotificationLive do
         </p>
         <div class="mt-5">
           <.link navigate={~p"/watchlists"} class="btn btn-ghost">
-            Browse watchlists
-            <.icon name="hero-arrow-right" class="size-4" />
+            Browse watchlists <.icon name="hero-arrow-right" class="size-4" />
           </.link>
         </div>
       </div>
@@ -439,11 +451,17 @@ defmodule AbyssalwatchWeb.NotificationLive do
   defp empty_filtered(assigns) do
     {title, subtitle} =
       case {assigns.filter, assigns.watchlist_filter} do
-        {"unread", _} -> {"No unread notifications.", "You're caught up."}
-        {"read", _} -> {"No read notifications yet.", "Open one to mark it read."}
+        {"unread", _} ->
+          {"No unread notifications.", "You're caught up."}
+
+        {"read", _} ->
+          {"No read notifications yet.", "Open one to mark it read."}
+
         {"all", wid} when not is_nil(wid) ->
           {"No matches from this watchlist.", "Try a different watchlist or clear the filter."}
-        _ -> {"No matches.", ""}
+
+        _ ->
+          {"No matches.", ""}
       end
 
     assigns = assign(assigns, :title, title) |> assign(:subtitle, subtitle)
@@ -551,9 +569,9 @@ defmodule AbyssalwatchWeb.NotificationLive do
         <tbody>
           <%= for n <- @notifications do %>
             <% expanded = @expanded_id == n.id
-               flashing = @flash_id == n.id and not n.read
-               watchlist_name = watchlist_name_for(@watchlists, n)
-               confirming = @confirming_delete_id == n.id %>
+            flashing = @flash_id == n.id and not n.read
+            watchlist_name = watchlist_name_for(@watchlists, n)
+            confirming = @confirming_delete_id == n.id %>
             <tr
               id={"row-#{n.id}"}
               phx-click="toggle_row"
@@ -570,7 +588,7 @@ defmodule AbyssalwatchWeb.NotificationLive do
                   n.read && "text-ink-4",
                   flashing && "animate-glyph-flash"
                 ]}>
-                  <%= if n.read, do: "○", else: "●" %>
+                  {if n.read, do: "○", else: "●"}
                 </span>
               </td>
               <td>
@@ -660,8 +678,7 @@ defmodule AbyssalwatchWeb.NotificationLive do
           rel="noopener noreferrer"
           class="btn btn-sm btn-primary"
         >
-          Open contract
-          <.icon name="hero-arrow-top-right-on-square" class="size-3.5" />
+          Open contract <.icon name="hero-arrow-top-right-on-square" class="size-3.5" />
         </a>
 
         <.link

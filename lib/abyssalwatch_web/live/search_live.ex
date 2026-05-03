@@ -471,8 +471,12 @@ defmodule AbyssalwatchWeb.SearchLive do
   end
 
   defp get_attribute_value(attrs, attr_name) do
-    # Try multiple key formats (string, atom, etc.)
-    value = attrs[attr_name] || attrs[String.to_atom(attr_name)] || attrs[to_string(attr_name)]
+    # Try multiple key formats (string, atom, etc.). Avoid String.to_atom/1 on
+    # user-supplied attr_name to prevent atom exhaustion.
+    value =
+      attrs[attr_name] ||
+        attrs[to_string(attr_name)] ||
+        attrs[safe_existing_atom(attr_name)]
 
     case value do
       nil ->
@@ -650,7 +654,7 @@ defmodule AbyssalwatchWeb.SearchLive do
     base = module_type.base_attributes || %{}
     key = to_string(attr_name)
 
-    case base[key] || base[String.to_atom(key)] do
+    case base[key] || base[safe_existing_atom(key)] do
       %{} = meta ->
         %{
           min: numeric(meta["min"] || meta[:min]),
@@ -792,16 +796,12 @@ defmodule AbyssalwatchWeb.SearchLive do
         <%= cond do %>
           <% @loading and Enum.empty?(@modules) -> %>
             <.results_skeleton />
-
           <% is_nil(@selected_type) and Enum.empty?(@modules) -> %>
             <.empty_initial recent_searches={@recent_searches} />
-
           <% Enum.empty?(@modules) and Enum.any?(@raw_modules) -> %>
             <.empty_filtered active_filter_count={@active_filter_count} />
-
           <% Enum.empty?(@modules) -> %>
             <.empty_pre_search />
-
           <% true -> %>
             <.results_table
               modules={@modules}
@@ -1154,8 +1154,7 @@ defmodule AbyssalwatchWeb.SearchLive do
       <div class="px-6 py-12 text-center">
         <p class="text-ink-1 text-[15px]">No modules match these filters.</p>
         <p class="text-ink-3 text-[13px] mt-1">
-          Loosen a filter, or clear all
-          <span :if={@active_filter_count > 0} class="tnum">({@active_filter_count})</span>.
+          Loosen a filter, or clear all <span :if={@active_filter_count > 0} class="tnum">({@active_filter_count})</span>.
         </p>
         <button type="button" phx-click="clear_filters" class="btn btn-sm mt-4">
           Clear filters
@@ -1224,7 +1223,9 @@ defmodule AbyssalwatchWeb.SearchLive do
                 ]}
               >
                 Name
-                <span class="text-accent text-[10px]">{sort_caret("name", @sort_by, @sort_order)}</span>
+                <span class="text-accent text-[10px]">
+                  {sort_caret("name", @sort_by, @sort_order)}
+                </span>
               </button>
             </th>
             <th class="text-right">
@@ -1238,7 +1239,9 @@ defmodule AbyssalwatchWeb.SearchLive do
                 ]}
               >
                 Score
-                <span class="text-accent text-[10px]">{sort_caret("score", @sort_by, @sort_order)}</span>
+                <span class="text-accent text-[10px]">
+                  {sort_caret("score", @sort_by, @sort_order)}
+                </span>
               </button>
             </th>
             <th class="text-right">
@@ -1252,7 +1255,9 @@ defmodule AbyssalwatchWeb.SearchLive do
                 ]}
               >
                 Price (ISK)
-                <span class="text-accent text-[10px]">{sort_caret("price", @sort_by, @sort_order)}</span>
+                <span class="text-accent text-[10px]">
+                  {sort_caret("price", @sort_by, @sort_order)}
+                </span>
               </button>
             </th>
             <th>Attributes</th>
@@ -1261,10 +1266,10 @@ defmodule AbyssalwatchWeb.SearchLive do
         <tbody>
           <%= for entry <- @modules do %>
             <% module = entry.module
-               score = entry.score
-               row_id = module_dom_id(entry)
-               is_top = @top_entry == entry
-               is_selected = @selected_module && module_dom_id(@selected_module) == row_id %>
+            score = entry.score
+            row_id = module_dom_id(entry)
+            is_top = @top_entry == entry
+            is_selected = @selected_module && module_dom_id(@selected_module) == row_id %>
             <tr
               id={row_id}
               phx-click="select_row"
@@ -1275,7 +1280,10 @@ defmodule AbyssalwatchWeb.SearchLive do
               ]}
             >
               <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
-                <%= if is_top do %>▸<% else %><% end %>
+                <%= if is_top do %>
+                  ▸
+                <% else %>
+                <% end %>
               </td>
               <td>
                 <div class="font-medium text-ink-1">{module[:name] || module.name}</div>
@@ -1384,11 +1392,16 @@ defmodule AbyssalwatchWeb.SearchLive do
         <ul class="divide-y divide-rule-1">
           <%= for {attr, value} <- Enum.sort_by(@attrs, fn {k, _} -> humanize(k) end) do %>
             <% meta = attribute_meta(@module_type, attr)
-               numeric_value = numeric(case value do
-                 %{"value" => v} -> v
-                 v -> v
-               end)
-               pct = meta && percent_position(numeric_value, meta) %>
+
+            numeric_value =
+              numeric(
+                case value do
+                  %{"value" => v} -> v
+                  v -> v
+                end
+              )
+
+            pct = meta && percent_position(numeric_value, meta) %>
             <li class="px-5 py-3">
               <div class="flex items-baseline justify-between gap-3">
                 <span class="text-[13px] text-ink-2 truncate">{humanize(attr)}</span>
@@ -1421,7 +1434,7 @@ defmodule AbyssalwatchWeb.SearchLive do
           id="copy-contract-btn"
           class="btn btn-primary flex-1"
         >
-          <%= if @copy_state == :copied, do: "Copied", else: "Copy contract" %>
+          {if @copy_state == :copied, do: "Copied", else: "Copy contract"}
         </button>
         <span :if={!@contract} class="text-[12px] text-ink-4 flex-1">
           No contract URL provided.
@@ -1441,8 +1454,7 @@ defmodule AbyssalwatchWeb.SearchLive do
           rel="noopener noreferrer"
           class="btn btn-ghost"
         >
-          Open
-          <.icon name="hero-arrow-top-right-on-square" class="size-4" />
+          Open <.icon name="hero-arrow-top-right-on-square" class="size-4" />
         </a>
         <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyContract">
           export default {
@@ -1478,8 +1490,19 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp format_price(_), do: "—"
 
+  defp safe_existing_atom(value) when is_atom(value), do: value
+
+  defp safe_existing_atom(value) when is_binary(value) do
+    String.to_existing_atom(value)
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp safe_existing_atom(_), do: nil
+
   defp format_attribute_value(value) when is_float(value) do
     rounded = Float.round(value, 2)
+
     if rounded == Float.round(rounded, 0) do
       Integer.to_string(trunc(rounded))
     else

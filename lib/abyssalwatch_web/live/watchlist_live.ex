@@ -120,7 +120,9 @@ defmodule AbyssalwatchWeb.WatchlistLive do
 
   @impl true
   def handle_event("validate", %{"watchlist" => params}, socket) do
-    form_data = parse_form_params(params, socket.assigns.form_data)
+    form_data =
+      parse_form_params(params, socket.assigns.form_data, socket.assigns.module_types)
+
     errors = validate_form(form_data)
 
     {:noreply,
@@ -131,7 +133,9 @@ defmodule AbyssalwatchWeb.WatchlistLive do
 
   @impl true
   def handle_event("save", %{"watchlist" => params}, socket) do
-    form_data = parse_form_params(params, socket.assigns.form_data)
+    form_data =
+      parse_form_params(params, socket.assigns.form_data, socket.assigns.module_types)
+
     errors = validate_form(form_data)
 
     if Enum.empty?(errors) do
@@ -156,7 +160,11 @@ defmodule AbyssalwatchWeb.WatchlistLive do
         case Ash.update(watchlist, %{}, action: :toggle_notifications) do
           {:ok, updated} ->
             {:noreply,
-             assign(socket, :watchlists, update_watchlist_in_list(socket.assigns.watchlists, updated))}
+             assign(
+               socket,
+               :watchlists,
+               update_watchlist_in_list(socket.assigns.watchlists, updated)
+             )}
 
           {:error, _} ->
             {:noreply, put_flash(socket, :error, "Failed to toggle notifications")}
@@ -341,7 +349,7 @@ defmodule AbyssalwatchWeb.WatchlistLive do
 
     %{
       default_form_data()
-      | name: type && "#{type.name} watch" || "",
+      | name: (type && "#{type.name} watch") || "",
         module_type_id: type_id,
         module_type_name: type && type.name,
         price_threshold: parse_decimal(params["max_price"]),
@@ -369,8 +377,8 @@ defmodule AbyssalwatchWeb.WatchlistLive do
     Enum.map(map, fn {name, value} -> %{name: name, value: value} end)
   end
 
-  defp parse_form_params(params, current_data) do
-    module_type = find_module_type_by_id(params["module_type_id"])
+  defp parse_form_params(params, current_data, module_types) do
+    module_type = find_module_type_by_id(params["module_type_id"], module_types)
 
     %{
       name: params["name"] || "",
@@ -386,16 +394,13 @@ defmodule AbyssalwatchWeb.WatchlistLive do
     }
   end
 
-  defp find_module_type_by_id(nil), do: nil
-  defp find_module_type_by_id(""), do: nil
+  defp find_module_type_by_id(nil, _), do: nil
+  defp find_module_type_by_id("", _), do: nil
 
-  defp find_module_type_by_id(id) do
+  defp find_module_type_by_id(id, module_types) do
     case Integer.parse(to_string(id)) do
       {type_id, _} ->
-        case Ash.read(ModuleType, action: :by_eve_type_id, args: %{eve_type_id: type_id}) do
-          {:ok, [type | _]} -> type
-          _ -> nil
-        end
+        Enum.find(module_types, &(&1.eve_type_id == type_id))
 
       :error ->
         nil
@@ -593,7 +598,7 @@ defmodule AbyssalwatchWeb.WatchlistLive do
         </div>
       </header>
 
-      <%= if Enum.empty?(@watchlists) do %>
+      <%= if Enum.empty?(@watchlists) and @mode not in [:new, :edit] do %>
         <.empty_state />
       <% else %>
         <div class="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-8">
@@ -646,8 +651,7 @@ defmodule AbyssalwatchWeb.WatchlistLive do
             Create your first watchlist
           </button>
           <.link navigate={~p"/search"} class="btn btn-ghost">
-            Browse search
-            <.icon name="hero-arrow-right" class="size-4" />
+            Browse search <.icon name="hero-arrow-right" class="size-4" />
           </.link>
         </div>
       </div>
@@ -733,7 +737,7 @@ defmodule AbyssalwatchWeb.WatchlistLive do
           ]}
           aria-hidden="true"
         >
-          <%= if @paused, do: "○", else: "●" %>
+          {if @paused, do: "○", else: "●"}
         </span>
         <span class="flex-1 min-w-0">
           <span class={[
@@ -785,7 +789,8 @@ defmodule AbyssalwatchWeb.WatchlistLive do
           <span class="text-ink-2">{@watchlist.match_count || 0}</span>
           {pluralize(@watchlist.match_count || 0, "match", "matches")}
           <%= if @watchlist.last_checked_at do %>
-            <span class="text-ink-4">·</span> last checked {format_time_ago(@watchlist.last_checked_at)}
+            <span class="text-ink-4">·</span>
+            last checked {format_time_ago(@watchlist.last_checked_at)}
           <% end %>
         </p>
       </div>
@@ -796,32 +801,35 @@ defmodule AbyssalwatchWeb.WatchlistLive do
         </h3>
         <dl class="divide-y divide-rule-1 -mx-2">
           <.kv label="Max price">
-            <span class="tnum"><%= format_price_isk(@watchlist.price_threshold) %></span>
+            <span class="tnum">{format_price_isk(@watchlist.price_threshold)}</span>
           </.kv>
           <.kv label="Min score">
-            <span class="tnum"><%= format_score(@watchlist.min_score) %></span>
+            <span class="tnum">{format_score(@watchlist.min_score)}</span>
           </.kv>
         </dl>
       </section>
 
       <section class="px-5 py-4 border-b border-rule-1">
         <h3 class="text-[11px] uppercase tracking-wider text-ink-3 font-medium mb-3">
-          Important attributes
-          <span class="text-ink-4 normal-case tracking-normal">(minimum)</span>
+          Important attributes <span class="text-ink-4 normal-case tracking-normal">(minimum)</span>
         </h3>
         <.attr_list attrs={@watchlist.important_attributes} comparator="≥" />
       </section>
 
       <section class="px-5 py-4 border-b border-rule-1">
         <h3 class="text-[11px] uppercase tracking-wider text-ink-3 font-medium mb-3">
-          Unimportant attributes
-          <span class="text-ink-4 normal-case tracking-normal">(maximum)</span>
+          Unimportant attributes <span class="text-ink-4 normal-case tracking-normal">(maximum)</span>
         </h3>
         <.attr_list attrs={@watchlist.unimportant_attributes} comparator="≤" />
       </section>
 
       <footer class="px-5 py-3 flex items-center gap-2 flex-wrap">
-        <button type="button" class="btn btn-primary btn-sm" phx-click="edit" phx-value-id={@watchlist.id}>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          phx-click="edit"
+          phx-value-id={@watchlist.id}
+        >
           Edit
         </button>
         <button
@@ -948,7 +956,7 @@ defmodule AbyssalwatchWeb.WatchlistLive do
     <div class="panel">
       <div class="panel-header">
         <h2 class="text-[15px] font-semibold text-ink-1">
-          <%= if @mode == :new, do: "New watchlist", else: "Edit watchlist" %>
+          {if @mode == :new, do: "New watchlist", else: "Edit watchlist"}
         </h2>
         <button type="button" class="btn btn-sm btn-ghost" phx-click="cancel_form">
           Cancel
@@ -985,7 +993,9 @@ defmodule AbyssalwatchWeb.WatchlistLive do
           />
           <select
             id="watchlist-type"
-            name={if @mode == :edit, do: "watchlist[_module_type_id]", else: "watchlist[module_type_id]"}
+            name={
+              if @mode == :edit, do: "watchlist[_module_type_id]", else: "watchlist[module_type_id]"
+            }
             class={["select", @form_errors[:module_type_id] && "select-error"]}
             disabled={@mode == :edit}
           >
@@ -1075,7 +1085,7 @@ defmodule AbyssalwatchWeb.WatchlistLive do
         <div class="flex items-center justify-end gap-2 pt-3 border-t border-rule-1">
           <button type="button" class="btn" phx-click="cancel_form">Cancel</button>
           <button type="submit" class="btn btn-primary">
-            <%= if @mode == :new, do: "Create", else: "Save changes" %>
+            {if @mode == :new, do: "Create", else: "Save changes"}
           </button>
         </div>
       </form>

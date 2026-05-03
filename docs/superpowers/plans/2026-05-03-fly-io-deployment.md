@@ -85,15 +85,9 @@ ls Dockerfile .dockerignore rel/overlays/bin/server rel/overlays/bin/migrate
 
 Expected: all four paths print without errors.
 
-- [ ] **Step 3: Verify the build works locally**
+- [ ] **Step 3: Commit**
 
-```bash
-docker build -t abyssalwatch:local .
-```
-
-Expected: build completes successfully with a final image tagged `abyssalwatch:local`. If it fails on asset compilation, fix the Dockerfile (commonly: missing `mix assets.deploy` step — but `phx.gen.release --docker` includes it by default in Phoenix 1.8).
-
-- [ ] **Step 4: Commit**
+(No local `docker build` verification — this is a devcontainer without Docker. The Dockerfile is exercised by `fly deploy` in Task 7, which is the real build.)
 
 ```bash
 git add Dockerfile .dockerignore rel/

@@ -1036,31 +1036,27 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp results_header(assigns) do
     ~H"""
-    <header class="flex items-end justify-between gap-6 pb-6 mb-6 border-b border-rule-strong">
-      <div class="min-w-0">
-        <h1 class="text-[28px] leading-[36px] font-semibold text-ink-1 tracking-[-0.012em]">
-          {if @selected_type, do: @selected_type.name, else: "Search"}
-        </h1>
-        <p class="mt-1.5 text-[13px] text-ink-3">
-          <%= cond do %>
-            <% is_nil(@selected_type) -> %>
-              Find and score abyssal modules from live Mutamarket listings.
-            <% Enum.empty?(@raw_modules) and not @loading -> %>
-              No fetch yet. Pick a type and search.
-            <% true -> %>
-              <span class="tnum">{length(@modules)}</span>
-              <%= if length(@modules) != length(@raw_modules) do %>
-                of <span class="tnum">{length(@raw_modules)}</span> results
-              <% else %>
-                results
-              <% end %>
-              <span :if={@fetched_at} class={["ml-1", stale?(@fetched_at) && "text-status-training"]}>
-                · {time_ago(@fetched_at)}
-              </span>
-          <% end %>
-        </p>
-      </div>
-    </header>
+    <.header>
+      {if @selected_type, do: @selected_type.name, else: "Search"}
+      <:subtitle>
+        <%= cond do %>
+          <% is_nil(@selected_type) -> %>
+            Find and score abyssal modules from live Mutamarket listings.
+          <% Enum.empty?(@raw_modules) and not @loading -> %>
+            No fetch yet. Pick a type and search.
+          <% true -> %>
+            <span class="tnum">{length(@modules)}</span>
+            <%= if length(@modules) != length(@raw_modules) do %>
+              of <span class="tnum">{length(@raw_modules)}</span> results
+            <% else %>
+              results
+            <% end %>
+            <span :if={@fetched_at} class={["ml-1", stale?(@fetched_at) && "text-status-training"]}>
+              · {time_ago(@fetched_at)}
+            </span>
+        <% end %>
+      </:subtitle>
+    </.header>
     """
   end
 
@@ -1293,10 +1289,7 @@ defmodule AbyssalwatchWeb.SearchLive do
               </td>
               <td class={["text-right", (score || 0) >= 0.85 && "is-strong"]}>
                 <div class="inline-flex items-center justify-end gap-2">
-                  <span class={[
-                    "tnum",
-                    ((score || 0) >= 0.85 && "text-accent-strong font-medium") || "text-ink-1"
-                  ]}>
+                  <span class="tnum text-ink-1">
                     {format_score(score)}
                   </span>
                   <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">

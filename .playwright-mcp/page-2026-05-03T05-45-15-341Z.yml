@@ -1,0 +1,116 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - link "AbyssalWatch" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: AbyssalWatch
+    - navigation "Primary" [ref=e7]:
+      - link "Search" [ref=e8] [cursor=pointer]:
+        - /url: /search
+      - link "Optimize" [ref=e9] [cursor=pointer]:
+        - /url: /optimize
+      - link "Dashboard" [ref=e10] [cursor=pointer]:
+        - /url: /dashboard
+      - link "Watchlists" [ref=e11] [cursor=pointer]:
+        - /url: /watchlists
+      - link "Notifications" [ref=e12] [cursor=pointer]:
+        - /url: /notifications
+    - link "Sign in" [ref=e14] [cursor=pointer]:
+      - /url: /sign-in
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e18]:
+        - generic [ref=e19]:
+          - heading "Paste an EFT to begin" [level=2] [ref=e20]
+          - generic [ref=e21] [cursor=pointer]:
+            - text: Or upload .eft
+            - button "Or upload .eft" [ref=e22]
+        - textbox "[Astero, Cap-Stable Tank] Damage Control II Small Armor Repairer II [Empty Low slot] 1MN Afterburner II [Empty Med slot] Light Neutron Blaster II [Empty High slot]" [ref=e24]:
+          - /placeholder: "[Astero, Cap-Stable Tank]\n\nDamage Control II\nSmall Armor Repairer II\n[Empty Low slot]\n\n1MN Afterburner II\n[Empty Med slot]\n\nLight Neutron Blaster II\n[Empty High slot]\n"
+        - generic [ref=e25]:
+          - paragraph [ref=e26]: Drop a .eft file on the textarea, or paste then press Ctrl-Enter.
+          - button "Load fitting" [disabled] [ref=e27]
+      - generic [ref=e28]:
+        - complementary:
+          - generic:
+            - heading "Tune" [level=2]
+            - generic: load a fit
+          - generic:
+            - generic:
+              - heading "Constraints" [level=3]
+              - generic:
+                - generic:
+                  - generic: CPU (tf)
+                  - spinbutton: "400"
+                - generic:
+                  - generic: Power grid (MW)
+                  - spinbutton: "1000"
+                - generic:
+                  - generic: Calibration
+                  - spinbutton: "400"
+                - generic:
+                  - generic: Max budget (ISK)
+                  - spinbutton
+            - generic:
+              - heading "Slots" [level=3]
+              - generic:
+                - generic:
+                  - generic: H
+                  - spinbutton "H": "4"
+                - generic:
+                  - generic: M
+                  - spinbutton "M": "4"
+                - generic:
+                  - generic: L
+                  - spinbutton "L": "4"
+                - generic:
+                  - generic: R
+                  - spinbutton "R": "3"
+            - generic:
+              - heading "Objectives" [level=3]
+              - generic:
+                - generic:
+                  - generic: Price
+                  - slider: "0.25"
+                  - generic: "0.25"
+                - generic:
+                  - generic: Performance
+                  - slider: "0.35"
+                  - generic: "0.35"
+                - generic:
+                  - generic: Efficiency
+                  - slider: "0.3"
+                  - generic: "0.30"
+                - generic:
+                  - generic: Availability
+                  - slider: "0.1"
+                  - generic: "0.10"
+            - generic:
+              - heading "Solver" [level=3]
+              - generic:
+                - generic:
+                  - radio "Heuristic under 1s" [checked]
+                  - generic: Heuristic
+                  - generic: under 1s
+                - generic:
+                  - radio "Constraint up to 30s"
+                  - generic: Constraint
+                  - generic: up to 30s
+              - paragraph: Fast greedy fill. Best for exploring options.
+            - generic:
+              - generic:
+                - heading "Module types" [level=3]
+                - generic: 0 included
+              - paragraph:
+                - text: Auto from fit.
+                - button "Edit included"
+        - generic [ref=e29]:
+          - generic [ref=e31]:
+            - button "Optimize" [disabled] [ref=e32]
+            - generic [ref=e33]: ·
+            - generic [ref=e34]: heuristic
+            - generic [ref=e35]: ·
+            - generic [ref=e36]: 0 types
+            - generic [ref=e37]: Ctrl-Enter to run
+          - generic [ref=e39]:
+            - paragraph [ref=e40]: Load a fitting to begin.
+            - paragraph [ref=e41]: Paste an EFT above. The optimizer will fill the abyssal slots.

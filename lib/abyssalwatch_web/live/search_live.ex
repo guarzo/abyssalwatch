@@ -1298,12 +1298,11 @@ defmodule AbyssalwatchWeb.SearchLive do
                 {format_price(module[:price] || module.price)}
               </td>
               <td>
-                <div class="text-[12px] text-ink-3 space-x-3">
-                  <%= for {attr, value} <- Enum.take(module[:attributes] || module.attributes || %{}, 3) do %>
-                    <span>
-                      <span>{humanize(attr)}</span>
-                      <span class="text-ink-2 tnum ml-1">{format_attribute_value(value)}</span>
-                    </span>
+                <div class="text-[11px] text-ink-3 truncate max-w-[280px]">
+                  <%= for {{attr, value}, idx} <- Enum.with_index(Enum.take(module[:attributes] || module.attributes || %{}, 3)) do %>
+                    <span :if={idx > 0} class="text-ink-4 mx-1.5">·</span>
+                    <span>{humanize(attr)}</span>
+                    <span class="text-ink-2 tnum ml-1">{format_attribute_value(value)}</span>
                   <% end %>
                 </div>
               </td>
@@ -1480,12 +1479,18 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp format_price(_), do: "—"
 
   defp format_attribute_value(value) when is_float(value) do
-    Float.round(value, 2) |> :erlang.float_to_binary(decimals: 2)
+    rounded = Float.round(value, 2)
+    if rounded == Float.round(rounded, 0) do
+      Integer.to_string(trunc(rounded))
+    else
+      :erlang.float_to_binary(rounded, decimals: 2)
+    end
   end
 
   defp format_attribute_value(value) when is_integer(value), do: Integer.to_string(value)
 
   defp format_attribute_value(%{"value" => v}), do: format_attribute_value(v)
+  defp format_attribute_value(%{value: v}), do: format_attribute_value(v)
 
   defp format_attribute_value(nil), do: "—"
 

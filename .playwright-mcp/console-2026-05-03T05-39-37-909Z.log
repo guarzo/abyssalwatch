@@ -1,0 +1,5 @@
+[     901ms] [INFO] %c📡 [info] GET /optimize
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[     922ms] [INFO] %c📡 [info] Sent 200 in 48ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[    1457ms] [LOG] phx-GKv3p9pxuRO2TgiG mount:  -  {0: Object, 1: Object, 2: Object, 3: Object, 4: Object, 5: Object, 6: Object, 7: Object, p: Object, s: 32} @ http://localhost:4000/assets/js/app.js:1863

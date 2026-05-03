@@ -1,0 +1,113 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - link "AbyssalWatch" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: AbyssalWatch
+    - navigation "Primary" [ref=e7]:
+      - link "Search" [ref=e8] [cursor=pointer]:
+        - /url: /search
+      - link "Optimize" [ref=e9] [cursor=pointer]:
+        - /url: /optimize
+      - link "Dashboard" [ref=e10] [cursor=pointer]:
+        - /url: /dashboard
+      - link "Watchlists" [ref=e11] [cursor=pointer]:
+        - /url: /watchlists
+      - link "Notifications" [ref=e12] [cursor=pointer]:
+        - /url: /notifications
+    - link "Sign in" [ref=e14] [cursor=pointer]:
+      - /url: /sign-in
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - complementary [ref=e17]:
+        - heading "Search" [level=2] [ref=e19]
+        - generic [ref=e20]:
+          - generic [ref=e22]:
+            - text: Module type
+            - combobox [ref=e23]:
+              - option "Select a type"
+              - option "Abyssal Assault Damage Control"
+              - option "Abyssal Ballistic Control System"
+              - option "Abyssal Damage Control"
+              - option "Abyssal Entropic Radiation Sink"
+              - option "Abyssal Gas Cloud Harvester"
+              - option "Abyssal Gas Cloud Scoop"
+              - option "Abyssal Gyrostabilizer"
+              - option "Abyssal Heat Sink"
+              - option "Abyssal Ice Harvester"
+              - option "Abyssal Magnetic Field Stabilizer"
+              - option "Abyssal Ore Processing"
+              - option "Abyssal Siege Module"
+              - option "Abyssal Stasis Webifier"
+              - option "Abyssal Vorton Tuning System"
+              - option "Abyssal Warp Disruptor"
+              - option "Abyssal Warp Scrambler"
+              - option "Afterburner"
+              - option "Ancillary Armor Repairer"
+              - option "Armor Plates"
+              - option "Armor Repairer"
+              - option "Damage Control" [selected]
+              - option "Energized Armor Membrane"
+              - option "Microwarpdrive"
+              - option "Shield Booster"
+              - option "Shield Extender"
+              - option "Warp Scrambler"
+          - generic [ref=e24]:
+            - text: Scoring profile
+            - generic [ref=e25]:
+              - generic [ref=e26] [cursor=pointer]:
+                - radio "Default" [checked] [ref=e27]
+                - text: Default
+              - generic [ref=e28] [cursor=pointer]:
+                - radio "Conservative" [ref=e29]
+                - text: Conservative
+              - generic [ref=e30] [cursor=pointer]:
+                - radio "Aggressive" [ref=e31]
+                - text: Aggressive
+            - paragraph [ref=e32]: Balanced weights across price, attributes, and slot fit.
+          - generic [ref=e33]:
+            - text: Price (ISK)
+            - generic [ref=e34]:
+              - spinbutton [ref=e35]
+              - spinbutton [ref=e36]
+            - generic [ref=e37]:
+              - text: Minimum score
+              - spinbutton [ref=e38]
+          - generic [ref=e39]:
+            - text: Attribute filters
+            - generic [ref=e50]:
+              - generic [ref=e51]:
+                - generic [ref=e52]:
+                  - generic [ref=e53]: Armor Resist Bonus
+                  - generic [ref=e54]: ▲ better
+                - generic [ref=e55]:
+                  - spinbutton [ref=e56]
+                  - spinbutton [ref=e57]
+              - generic [ref=e58]:
+                - generic [ref=e59]:
+                  - generic [ref=e60]: Cpu
+                  - generic [ref=e61]: ▼ better
+                - generic [ref=e62]:
+                  - spinbutton [ref=e63]
+                  - spinbutton [ref=e64]
+              - generic [ref=e65]:
+                - generic [ref=e66]:
+                  - generic [ref=e67]: Hull Resist Bonus
+                  - generic [ref=e68]: ▲ better
+                - generic [ref=e69]:
+                  - spinbutton [ref=e70]
+                  - spinbutton [ref=e71]
+              - generic [ref=e72]:
+                - generic [ref=e73]:
+                  - generic [ref=e74]: Shield Resist Bonus
+                  - generic [ref=e75]: ▲ better
+                - generic [ref=e76]:
+                  - spinbutton [ref=e77]
+                  - spinbutton [ref=e78]
+          - button "Search Mutamarket" [ref=e80] [cursor=pointer]
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - heading "Damage Control" [level=1] [ref=e81]
+          - paragraph [ref=e45]: No fetch yet. Pick a type and search.
+        - generic [ref=e87]:
+          - paragraph [ref=e88]: Ready to search.
+          - paragraph [ref=e89]: Press Search Mutamarket in the sidebar to fetch listings.

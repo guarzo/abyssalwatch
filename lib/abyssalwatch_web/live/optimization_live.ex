@@ -43,6 +43,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
      |> assign(:optimization_error, nil)
      |> assign(:solutions, [])
      |> assign(:selected_solution, nil)
+     |> assign(:expanded_module_id, nil)
      |> assign(:copy_state, :idle)
      |> assign(:confirming_clear, false)
      |> allow_upload(:eft_file,
@@ -212,7 +213,18 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   @impl true
   def handle_event("select_solution", %{"index" => raw}, socket) do
     index = String.to_integer(raw)
-    {:noreply, assign(socket, :selected_solution, Enum.at(socket.assigns.solutions, index))}
+
+    {:noreply,
+     socket
+     |> assign(:selected_solution, Enum.at(socket.assigns.solutions, index))
+     |> assign(:expanded_module_id, nil)}
+  end
+
+  @impl true
+  def handle_event("toggle_module_detail", %{"module-id" => id}, socket) do
+    current = socket.assigns.expanded_module_id
+    next = if current == id, do: nil, else: id
+    {:noreply, assign(socket, :expanded_module_id, next)}
   end
 
   # ── Export ─────────────────────────────────────────────────────────
@@ -248,7 +260,10 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   # ── Keyboard ──────────────────────────────────────────────────────
 
   @impl true
-  def handle_event("keydown", %{"key" => key, "ctrlKey" => ctrl, "metaKey" => meta}, socket) do
+  def handle_event("keydown", %{"key" => key} = params, socket) do
+    ctrl = Map.get(params, "ctrlKey", false)
+    meta = Map.get(params, "metaKey", false)
+
     cond do
       key == "Escape" and socket.assigns.types_popover_open ->
         {:noreply, assign(socket, :types_popover_open, false)}
@@ -267,21 +282,33 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   @impl true
   def handle_info(:load_candidates, socket) do
+    module_types = socket.assigns.module_types
+    criteria = socket.assigns.criteria
+
     candidates =
       socket.assigns.included_type_ids
-      |> Enum.flat_map(fn type_id ->
-        type = Enum.find(socket.assigns.module_types, &(&1.eve_type_id == type_id))
-        slot_type = get_slot_type(type)
+      |> Task.async_stream(
+        fn type_id ->
+          type = Enum.find(module_types, &(&1.eve_type_id == type_id))
+          slot_type = get_slot_type(type)
 
-        case MutamarketClient.search_modules(type_id) do
-          {:ok, modules} ->
-            criteria = Criteria.merge_with_module_type(socket.assigns.criteria, type)
-            scored = Topsis.score(modules, criteria)
-            Optimization.prepare_candidates(scored, slot_type)
+          case MutamarketClient.search_modules(type_id) do
+            {:ok, modules} ->
+              merged = Criteria.merge_with_module_type(criteria, type)
+              scored = Topsis.score(modules, merged)
+              Optimization.prepare_candidates(scored, slot_type)
 
-          {:error, _} ->
-            []
-        end
+            {:error, _} ->
+              []
+          end
+        end,
+        max_concurrency: 8,
+        timeout: :infinity,
+        ordered: false
+      )
+      |> Enum.flat_map(fn
+        {:ok, list} -> list
+        _ -> []
       end)
 
     socket = assign(socket, :candidates, candidates) |> assign(:loading_modules, false)
@@ -426,8 +453,12 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
     types
     |> Enum.filter(fn t ->
+      base = String.replace_prefix(t.name, "Abyssal ", "")
+
       MapSet.member?(fit_module_names, t.name) or
-        Enum.any?(fit_module_names, &String.contains?(&1, t.name))
+        Enum.any?(fit_module_names, fn fit_name ->
+          String.contains?(fit_name, t.name) or String.contains?(fit_name, base)
+        end)
     end)
     |> Enum.map(& &1.eve_type_id)
   end
@@ -571,6 +602,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
             optimizing={@optimizing}
             constraints={@constraints}
             copy_state={@copy_state}
+            expanded_module_id={@expanded_module_id}
           />
         </div>
       </div>
@@ -846,8 +878,19 @@ defmodule AbyssalwatchWeb.OptimizationLive do
           </div>
         </section>
 
-        <section>
-          <h3 class="field-label mb-2">Solver</h3>
+        <details class="group">
+          <summary class="flex items-baseline justify-between cursor-pointer list-none mb-2 select-none">
+            <span class="field-label mb-0 flex items-center gap-1.5">
+              <span
+                class="text-ink-4 text-[10px] transition-transform group-open:rotate-90"
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+              Solver
+            </span>
+            <span class="text-[11px] text-ink-4 capitalize">{@solver_mode}</span>
+          </summary>
           <div class="grid grid-cols-2 gap-1">
             <.solver_radio
               mode="heuristic"
@@ -864,18 +907,26 @@ defmodule AbyssalwatchWeb.OptimizationLive do
           </div>
           <p class="mt-1.5 text-[11px] text-ink-4 leading-snug">
             {if @solver_mode == :heuristic,
-              do: "Fast greedy fill. Best for exploring options.",
-              else: "Branch-and-bound search. Best for final tuning."}
+              do: "Greedy fill, sub-second.",
+              else: "Branch-and-bound, exhaustive."}
           </p>
-        </section>
+        </details>
 
-        <section class="relative">
-          <div class="flex items-baseline justify-between mb-2">
-            <h3 class="field-label mb-0">Module types</h3>
+        <details class="group relative">
+          <summary class="flex items-baseline justify-between cursor-pointer list-none mb-2 select-none">
+            <span class="field-label mb-0 flex items-center gap-1.5">
+              <span
+                class="text-ink-4 text-[10px] transition-transform group-open:rotate-90"
+                aria-hidden="true"
+              >
+                ▸
+              </span>
+              Module types
+            </span>
             <span class="text-[11px] text-ink-4 tnum">
               {length(@included_type_ids)} included
             </span>
-          </div>
+          </summary>
           <p class="text-[11px] text-ink-4 leading-snug">
             Auto from fit.
             <button
@@ -894,7 +945,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
               type_filter={@type_filter}
             />
           <% end %>
-        </section>
+        </details>
       </div>
     </aside>
     """
@@ -1195,6 +1246,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   attr :optimizing, :boolean, required: true
   attr :constraints, :map, required: true
   attr :copy_state, :atom, required: true
+  attr :expanded_module_id, :any, required: true
 
   defp solutions_panel(assigns) do
     ~H"""
@@ -1220,7 +1272,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
           </div>
         </div>
       <% true -> %>
-        <div class={["space-y-4", @optimizing && "opacity-50"]}>
+        <div class={["space-y-4", @optimizing && "opacity-50"]} aria-busy={@optimizing}>
           <.solutions_table
             solutions={@solutions}
             selected_solution={@selected_solution}
@@ -1231,6 +1283,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
             constraints={@constraints}
             fitting={@fitting}
             copy_state={@copy_state}
+            expanded_module_id={@expanded_module_id}
           />
         </div>
     <% end %>
@@ -1304,19 +1357,11 @@ defmodule AbyssalwatchWeb.OptimizationLive do
               ]}
             >
               <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
-                {if is_top, do: "▸", else: ""}
+                {if is_top, do: "★", else: ""}
               </td>
               <td class="text-ink-2 tnum">{solution.rank || idx + 1}</td>
               <td class="text-right">
-                <div class="inline-flex items-center justify-end gap-2">
-                  <span class="tnum text-ink-1">{format_score(solution.total_score)}</span>
-                  <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
-                    <span
-                      class="block h-full bg-accent"
-                      style={"width: #{round(min(solution.total_score, 1.0) * 100)}%"}
-                    />
-                  </span>
-                </div>
+                <span class="tnum text-ink-1">{format_score(solution.total_score)}</span>
               </td>
               <td class="text-right tnum">
                 {delta_label(delta)}
@@ -1332,22 +1377,33 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   defp score_delta(_solution, _fitting) do
     # Pilots' input fits rarely contain abyssal modules in the relevant
-    # slots, so a baseline isn't available yet. Render an em-dash placeholder.
+    # slots, so a baseline isn't available yet. Render n/a.
     nil
   end
 
-  defp delta_label(nil), do: Phoenix.HTML.raw("<span class=\"text-ink-4\">—</span>")
+  defp delta_label(nil),
+    do:
+      Phoenix.HTML.raw(
+        "<span class=\"text-ink-4\" title=\"No abyssal baseline in source fit\">n/a</span>"
+      )
 
   defp delta_label(delta) when delta >= 0,
-    do: Phoenix.HTML.raw("<span class=\"text-ink-1\">+#{format_score(delta)}</span>")
+    do:
+      Phoenix.HTML.raw(
+        "<span class=\"text-ink-1\"><span aria-hidden=\"true\">▴ </span>+#{format_score(delta)}</span>"
+      )
 
   defp delta_label(delta),
-    do: Phoenix.HTML.raw("<span class=\"text-status-error\">#{format_score(delta)}</span>")
+    do:
+      Phoenix.HTML.raw(
+        "<span class=\"text-status-error\"><span aria-hidden=\"true\">▾ </span>#{format_score(delta)}</span>"
+      )
 
   attr :solution, :any, required: true
   attr :constraints, :map, required: true
   attr :fitting, :any, required: true
   attr :copy_state, :atom, required: true
+  attr :expanded_module_id, :any, required: true
 
   defp selected_detail(assigns) do
     ~H"""
@@ -1392,20 +1448,45 @@ defmodule AbyssalwatchWeb.OptimizationLive do
         <ul class="divide-y divide-rule-1 border-t border-rule-1">
           <%= for {label, atom} <- [{"High", :high}, {"Med", :med}, {"Low", :low}, {"Rig", :rig}] do %>
             <% modules = Enum.filter(@solution.modules, &(&1.slot_type == atom)) %>
+            <%= if modules != [] do %>
+              <li class="px-5 py-1.5 bg-surface-2/40">
+                <span class="text-[10px] uppercase tracking-wider text-ink-3 font-semibold">
+                  {label} ({length(modules)})
+                </span>
+              </li>
+            <% end %>
             <%= for {mod, slot_idx} <- Enum.with_index(modules, 1) do %>
-              <li class="px-5 py-2.5 flex items-baseline gap-4">
-                <span class="text-[11px] uppercase tracking-wider text-ink-3 font-medium w-14 shrink-0">
-                  {label} {slot_idx}
-                </span>
-                <span class="text-ink-1 text-[13px] flex-1 min-w-0 truncate">
-                  {mod.name}
-                </span>
-                <span class="text-ink-2 text-[12px] tnum">
-                  {format_score(mod.score)}
-                </span>
-                <span class="text-ink-3 text-[12px] tnum w-32 text-right">
-                  {format_price_plain(mod.price)} ISK
-                </span>
+              <% is_expanded = @expanded_module_id == mod.id %>
+              <li>
+                <button
+                  type="button"
+                  class="w-full px-5 py-2.5 flex items-baseline gap-4 text-left hover:bg-surface-2 transition-colors"
+                  phx-click="toggle_module_detail"
+                  phx-value-module-id={mod.id}
+                  aria-expanded={to_string(is_expanded)}
+                >
+                  <span class="text-[11px] uppercase tracking-wider text-ink-3 font-medium w-14 shrink-0">
+                    {label} {slot_idx}
+                  </span>
+                  <.icon
+                    name={if is_expanded, do: "hero-chevron-down", else: "hero-chevron-right"}
+                    class="size-3 text-ink-3 shrink-0"
+                  />
+                  <span class="text-ink-1 text-[13px] flex-1 min-w-0 truncate">
+                    {mod.name}
+                  </span>
+                  <span class="text-ink-2 text-[12px] tnum">
+                    {format_score(mod.score)}
+                  </span>
+                  <span class="text-ink-3 text-[12px] tnum w-32 text-right">
+                    {format_price_plain(mod.price)} ISK
+                  </span>
+                </button>
+                <%= if is_expanded do %>
+                  <div class="px-5 pb-3 pl-[5.5rem] bg-surface-2">
+                    <.module_detail mod={mod} />
+                  </div>
+                <% end %>
               </li>
             <% end %>
           <% end %>
@@ -1420,6 +1501,51 @@ defmodule AbyssalwatchWeb.OptimizationLive do
     <% end %>
     """
   end
+
+  attr :mod, :any, required: true
+
+  defp module_detail(assigns) do
+    ~H"""
+    <div class="pt-2 space-y-2 text-[12px]">
+      <div class="flex items-center gap-3">
+        <%= if @mod.external_id && @mod.external_id != "" do %>
+          <a
+            href={"https://mutamarket.com/modules/#{@mod.external_id}"}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 text-accent hover:underline"
+          >
+            <.icon name="hero-arrow-top-right-on-square" class="size-3" />
+            View on Mutamarket
+          </a>
+        <% end %>
+        <span class="text-ink-3 font-mono">id: {@mod.external_id}</span>
+      </div>
+      <%= if @mod.attributes && map_size(@mod.attributes) > 0 do %>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+          <%= for {key, attr} <- Enum.sort(@mod.attributes) do %>
+            <div class="flex items-baseline justify-between gap-2 border-b border-rule-1/40 py-1">
+              <dt class="text-ink-3 truncate">{key}</dt>
+              <dd class="text-ink-1 tnum text-right">
+                {format_attr_value(attr)}
+                <%= if attr_unit(attr) do %>
+                  <span class="text-ink-3 ml-1">{attr_unit(attr)}</span>
+                <% end %>
+              </dd>
+            </div>
+          <% end %>
+        </dl>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp format_attr_value(%{"value" => v}), do: format_float(v)
+  defp format_attr_value(v) when is_number(v), do: format_float(v)
+  defp format_attr_value(v), do: to_string(v)
+
+  defp attr_unit(%{"unit" => u}) when is_binary(u) and u != "", do: u
+  defp attr_unit(_), do: nil
 
   attr :solution, :any, required: true
   attr :constraints, :map, required: true
@@ -1466,12 +1592,21 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
     ~H"""
     <div>
-      <div class="flex items-baseline justify-between">
+      <div class="flex items-baseline justify-between gap-2">
         <span class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">
           {@label}
         </span>
-        <span class={["text-[12px] tnum", @over && "text-status-error"]}>
-          {format_meter(@used, @cap)}{if @unit != "", do: " " <> @unit}
+        <span class="flex items-baseline gap-1.5">
+          <span
+            :if={@over}
+            class="text-[10px] uppercase tracking-wider text-status-error font-semibold"
+            aria-label="over capacity"
+          >
+            ! Over
+          </span>
+          <span class={["text-[12px] tnum", @over && "text-status-error"]}>
+            {format_meter(@used, @cap)}{if @unit != "", do: " " <> @unit}
+          </span>
         </span>
       </div>
       <span class="block mt-1.5 h-1 w-full bg-surface-3 rounded-sm overflow-hidden">
@@ -1491,12 +1626,12 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   defp format_meter(used, _) when is_number(used),
     do: :erlang.float_to_binary(used * 1.0, decimals: 1)
 
-  defp format_meter(_, _), do: "—"
+  defp format_meter(_, _), do: "n/a"
 
   defp format_score(score) when is_number(score),
     do: :erlang.float_to_binary(score * 1.0, decimals: 2)
 
-  defp format_score(_), do: "—"
+  defp format_score(_), do: "n/a"
 
   defp format_float(value) when is_float(value) do
     if value == Float.round(value, 0) do
@@ -1509,7 +1644,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   defp format_float(value) when is_integer(value), do: Integer.to_string(value)
   defp format_float(value), do: to_string(value)
 
-  defp format_price_plain(nil), do: "—"
+  defp format_price_plain(nil), do: "n/a"
 
   defp format_price_plain(%Decimal{} = price) do
     price
@@ -1524,5 +1659,5 @@ defmodule AbyssalwatchWeb.OptimizationLive do
     format_price_plain(Decimal.new(round(price)))
   end
 
-  defp format_price_plain(_), do: "—"
+  defp format_price_plain(_), do: "n/a"
 end

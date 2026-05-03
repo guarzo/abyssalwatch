@@ -1,0 +1,5 @@
+[     241ms] [INFO] %c📡 [info] GET /optimize
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[     347ms] [INFO] %c📡 [info] Sent 500 in 133ms
+ color: inherit; @ http://localhost:4000/phoenix/live_reload/frame:1828
+[     361ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:4000/optimize:0

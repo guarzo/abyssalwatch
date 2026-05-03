@@ -1,0 +1,82 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - link "AbyssalWatch" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e6]: AbyssalWatch
+    - navigation "Primary" [ref=e7]:
+      - link "Search" [ref=e8] [cursor=pointer]:
+        - /url: /search
+      - link "Optimize" [ref=e9] [cursor=pointer]:
+        - /url: /optimize
+      - link "Dashboard" [ref=e10] [cursor=pointer]:
+        - /url: /dashboard
+      - link "Watchlists" [ref=e11] [cursor=pointer]:
+        - /url: /watchlists
+      - link "Notifications" [ref=e12] [cursor=pointer]:
+        - /url: /notifications
+    - link "Sign in" [ref=e14] [cursor=pointer]:
+      - /url: /sign-in
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - complementary [ref=e17]:
+        - heading "Search" [level=2] [ref=e19]
+        - generic [ref=e20]:
+          - generic [ref=e22]:
+            - text: Module type
+            - combobox [ref=e23]:
+              - option "Select a type" [selected]
+              - option "Abyssal Assault Damage Control"
+              - option "Abyssal Ballistic Control System"
+              - option "Abyssal Damage Control"
+              - option "Abyssal Entropic Radiation Sink"
+              - option "Abyssal Gas Cloud Harvester"
+              - option "Abyssal Gas Cloud Scoop"
+              - option "Abyssal Gyrostabilizer"
+              - option "Abyssal Heat Sink"
+              - option "Abyssal Ice Harvester"
+              - option "Abyssal Magnetic Field Stabilizer"
+              - option "Abyssal Ore Processing"
+              - option "Abyssal Siege Module"
+              - option "Abyssal Stasis Webifier"
+              - option "Abyssal Vorton Tuning System"
+              - option "Abyssal Warp Disruptor"
+              - option "Abyssal Warp Scrambler"
+              - option "Afterburner"
+              - option "Ancillary Armor Repairer"
+              - option "Armor Plates"
+              - option "Armor Repairer"
+              - option "Damage Control"
+              - option "Energized Armor Membrane"
+              - option "Microwarpdrive"
+              - option "Shield Booster"
+              - option "Shield Extender"
+              - option "Warp Scrambler"
+          - generic [ref=e24]:
+            - text: Scoring profile
+            - generic [ref=e25]:
+              - generic [ref=e26] [cursor=pointer]:
+                - radio "Default" [checked] [ref=e27]
+                - text: Default
+              - generic [ref=e28] [cursor=pointer]:
+                - radio "Conservative" [ref=e29]
+                - text: Conservative
+              - generic [ref=e30] [cursor=pointer]:
+                - radio "Aggressive" [ref=e31]
+                - text: Aggressive
+            - paragraph [ref=e32]: Balanced weights across price, attributes, and slot fit.
+          - generic [ref=e33]:
+            - text: Price (ISK)
+            - generic [ref=e34]:
+              - spinbutton [ref=e35]
+              - spinbutton [ref=e36]
+            - generic [ref=e37]:
+              - text: Minimum score
+              - spinbutton [ref=e38]
+          - button "Search Mutamarket" [disabled] [ref=e40]
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - heading "Search" [level=1] [ref=e44]
+          - paragraph [ref=e45]: Find and score abyssal modules from live Mutamarket listings.
+        - generic [ref=e47]:
+          - paragraph [ref=e48]: Pick a module type to begin.
+          - paragraph [ref=e49]: Choose a type in the sidebar, then search Mutamarket for live listings.

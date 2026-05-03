@@ -219,7 +219,7 @@
     color: var(--accent);
     margin-left: -0.04em;
     font-weight: 400;
-    animation: caret-blink 1.4s steps(2, end) infinite;
+    animation: caret-blink 2s steps(2, end) infinite;
   }
   @keyframes caret-blink {
     0%, 50% { opacity: 1; }

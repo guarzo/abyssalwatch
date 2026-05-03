@@ -43,11 +43,14 @@ defmodule AbyssalwatchWeb.LegacyRedirectController do
 
   defp add_param(acc, params, legacy_key, new_key, transform) do
     case Map.get(params, legacy_key) do
-      nil -> acc
-      value -> case transform.(value) do
-        nil -> acc
-        ok -> [{new_key, ok} | acc]
-      end
+      nil ->
+        acc
+
+      value ->
+        case transform.(value) do
+          nil -> acc
+          ok -> [{new_key, ok} | acc]
+        end
     end
   end
 

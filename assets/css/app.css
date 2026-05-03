@@ -973,7 +973,7 @@
     display: inline-block;
     width: 14px;
     height: 1px;
-    background: var(--accent);
+    background: var(--accent-line-color, var(--accent));
   }
 
   /* Deal pill — amber. Beside price when row.price < median. */

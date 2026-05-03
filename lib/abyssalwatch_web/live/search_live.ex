@@ -615,8 +615,11 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   # Stable per-row DOM id used by phx-click/value-id. Mutamarket may
   # return multiple rolls per contract and modules without a unique :id;
-  # we tail every id with a phash of the entry to guarantee uniqueness.
-  defp module_dom_id(%{module: m} = entry) do
+  # we tail every id with a phash of the *module map* (not the full
+  # entry) so the id is stable across rescoring — entry includes the
+  # transient :score which would otherwise change with every criteria
+  # tweak and break LiveView's phx-update tracking.
+  defp module_dom_id(%{module: m}) do
     base =
       first_present([
         m[:id],
@@ -624,7 +627,7 @@ defmodule AbyssalwatchWeb.SearchLive do
         m[:contract_url]
       ]) || "x"
 
-    "row-#{base}-#{:erlang.phash2(entry)}"
+    "row-#{base}-#{:erlang.phash2(m)}"
     |> String.replace(~r/[^A-Za-z0-9_-]/, "_")
   end
 
@@ -825,6 +828,7 @@ defmodule AbyssalwatchWeb.SearchLive do
               sort_order={@sort_order}
               top_entry={@top_entry}
               selected_module={@selected_module}
+              selected_type={@selected_type}
             />
         <% end %>
       </div>
@@ -1049,10 +1053,10 @@ defmodule AbyssalwatchWeb.SearchLive do
   # Illustrative weight summary for the segmented profile chips: three
   # bars representing [price, attributes, fit]. Not the exact Criteria
   # weights — directional, for visual feedback only.
-  defp profile_weights("default"),      do: [0.50, 0.50, 0.50]
+  defp profile_weights("default"), do: [0.50, 0.50, 0.50]
   defp profile_weights("conservative"), do: [0.85, 0.40, 0.55]
-  defp profile_weights("aggressive"),   do: [0.30, 0.85, 0.45]
-  defp profile_weights(_),              do: [0.30, 0.30, 0.30]
+  defp profile_weights("aggressive"), do: [0.30, 0.85, 0.45]
+  defp profile_weights(_), do: [0.30, 0.30, 0.30]
 
   # ── Results header ───────────────────────────────────────────────────
 
@@ -1143,8 +1147,7 @@ defmodule AbyssalwatchWeb.SearchLive do
         <% end %>
         <%!-- Axis lines --%>
         <%= for {x, y} <- radar_axes() do %>
-          <line x1="0" y1="0" x2={x} y2={y}
-            stroke="oklch(0.38 0.006 250)" stroke-width="0.5" />
+          <line x1="0" y1="0" x2={x} y2={y} stroke="oklch(0.38 0.006 250)" stroke-width="0.5" />
         <% end %>
         <%!-- A representative "great roll" polygon, indigo-filled --%>
         <polygon
@@ -1329,11 +1332,13 @@ defmodule AbyssalwatchWeb.SearchLive do
   attr :sort_order, :string, required: true
   attr :top_entry, :any, required: true
   attr :selected_module, :any, required: true
+  attr :selected_type, :any, default: nil
 
   defp results_table(assigns) do
     median_price = compute_median_price(assigns.modules)
     radar_attrs = pick_radar_attributes(assigns.modules)
     attr_ranges = compute_attr_ranges(assigns.modules, radar_attrs)
+    attr_directions = compute_attr_directions(assigns.selected_type, radar_attrs)
 
     {s_tier, rest} = partition_s_tier(assigns.modules)
 
@@ -1342,6 +1347,7 @@ defmodule AbyssalwatchWeb.SearchLive do
       |> assign(:median_price, median_price)
       |> assign(:radar_attrs, radar_attrs)
       |> assign(:attr_ranges, attr_ranges)
+      |> assign(:attr_directions, attr_directions)
       |> assign(:s_tier_modules, s_tier)
       |> assign(:rest_modules, rest)
 
@@ -1407,7 +1413,11 @@ defmodule AbyssalwatchWeb.SearchLive do
           <%= if Enum.any?(@s_tier_modules) do %>
             <tr class="s-tier-divider" aria-hidden="true">
               <td colspan="5">
-                <span class="s-tier-divider-label">S-tier · {length(@s_tier_modules)} match{if length(@s_tier_modules) == 1, do: "", else: "es"}</span>
+                <span class="s-tier-divider-label">
+                  S-tier · {length(@s_tier_modules)} match{if length(@s_tier_modules) == 1,
+                    do: "",
+                    else: "es"}
+                </span>
               </td>
             </tr>
             <%= for entry <- @s_tier_modules do %>
@@ -1418,13 +1428,16 @@ defmodule AbyssalwatchWeb.SearchLive do
                 median_price={@median_price}
                 radar_attrs={@radar_attrs}
                 attr_ranges={@attr_ranges}
+                attr_directions={@attr_directions}
                 s_tier={true}
               />
             <% end %>
             <%= if Enum.any?(@rest_modules) do %>
               <tr class="s-tier-divider" aria-hidden="true">
                 <td colspan="5">
-                  <span class="s-tier-divider-label" style="--accent-line-color: var(--rule-strong);">Rest · {length(@rest_modules)}</span>
+                  <span class="s-tier-divider-label" style="--accent-line-color: var(--rule-strong);">
+                    Rest · {length(@rest_modules)}
+                  </span>
                 </td>
               </tr>
             <% end %>
@@ -1438,6 +1451,7 @@ defmodule AbyssalwatchWeb.SearchLive do
               median_price={@median_price}
               radar_attrs={@radar_attrs}
               attr_ranges={@attr_ranges}
+              attr_directions={@attr_directions}
               s_tier={false}
             />
           <% end %>
@@ -1453,6 +1467,7 @@ defmodule AbyssalwatchWeb.SearchLive do
   attr :median_price, :any, required: true
   attr :radar_attrs, :list, required: true
   attr :attr_ranges, :map, required: true
+  attr :attr_directions, :map, default: %{}
   attr :s_tier, :boolean, required: true
 
   defp result_row(assigns) do
@@ -1468,7 +1483,7 @@ defmodule AbyssalwatchWeb.SearchLive do
     is_deal = price_below?(price, assigns.median_price)
 
     radar_values =
-      radar_normalize(module, assigns.radar_attrs, assigns.attr_ranges)
+      radar_normalize(module, assigns.radar_attrs, assigns.attr_ranges, assigns.attr_directions)
 
     assigns =
       assigns
@@ -1902,9 +1917,12 @@ defmodule AbyssalwatchWeb.SearchLive do
   # Map a per-row {attr -> value} pair onto a 0..1 normalized list of
   # length len(attrs), in the same order as `attrs`. Constant attributes
   # (range collapsed to a point) emit 0.5 — neutral — to avoid spikes.
-  defp radar_normalize(_module, [], _ranges), do: []
+  # For "lower_better" attributes (e.g. cpu_usage, activation_cost), the
+  # normalized ratio is inverted so a smaller raw value still produces a
+  # longer spoke — visually consistent with "more spoke = better".
+  defp radar_normalize(_module, [], _ranges, _directions), do: []
 
-  defp radar_normalize(module, attrs, ranges) do
+  defp radar_normalize(module, attrs, ranges, directions) do
     attrs_map = module[:attributes] || module.attributes || %{}
 
     Enum.map(attrs, fn attr ->
@@ -1912,10 +1930,35 @@ defmodule AbyssalwatchWeb.SearchLive do
       {min_v, max_v} = Map.get(ranges, attr, {0.0, 1.0})
 
       cond do
-        is_nil(value) -> 0.0
-        max_v == min_v -> 0.5
-        true -> max(0.0, min(1.0, (value - min_v) / (max_v - min_v)))
+        is_nil(value) ->
+          0.0
+
+        max_v == min_v ->
+          0.5
+
+        true ->
+          ratio = max(0.0, min(1.0, (value - min_v) / (max_v - min_v)))
+
+          case Map.get(directions, attr, "higher_better") do
+            "lower_better" -> 1.0 - ratio
+            _ -> ratio
+          end
       end
+    end)
+  end
+
+  # Build an attribute -> direction map for the picked radar axes from
+  # the selected module type's metadata. Falls back to higher_better for
+  # any attribute not in the metadata.
+  defp compute_attr_directions(nil, _attrs), do: %{}
+
+  defp compute_attr_directions(module_type, attrs) do
+    base_attrs = module_type.base_attributes || %{}
+
+    Enum.reduce(attrs, %{}, fn attr, acc ->
+      key = to_string(attr)
+      direction = get_in(base_attrs, [key, "direction"]) || "higher_better"
+      Map.put(acc, attr, direction)
     end)
   end
 

@@ -68,7 +68,9 @@ defmodule AbyssalwatchWeb.WatchLive do
 
   defp load_data(socket) do
     user_id = socket.assigns.user_id
-    notifications = load_notifications(user_id, nil)
+    # Preserve the active watchlist filter across refreshes — the 30s
+    # :refresh tick must not silently widen the activity feed.
+    notifications = load_notifications(user_id, socket.assigns[:watchlist_filter])
     watchlists = load_watchlists(user_id)
     module_types = load_module_types()
 
@@ -357,10 +359,16 @@ defmodule AbyssalwatchWeb.WatchLive do
   end
 
   def handle_event("remove_important_attr", %{"index" => index}, socket) do
-    {idx, _} = Integer.parse(index)
     fd = socket.assigns.form_data
-    next = List.delete_at(fd.important_attributes, idx)
-    {:noreply, assign(socket, :form_data, %{fd | important_attributes: next})}
+
+    case parse_list_index(index, fd.important_attributes) do
+      :error ->
+        {:noreply, socket}
+
+      {:ok, idx} ->
+        next = List.delete_at(fd.important_attributes, idx)
+        {:noreply, assign(socket, :form_data, %{fd | important_attributes: next})}
+    end
   end
 
   def handle_event("add_unimportant_attr", _params, socket) do
@@ -370,10 +378,16 @@ defmodule AbyssalwatchWeb.WatchLive do
   end
 
   def handle_event("remove_unimportant_attr", %{"index" => index}, socket) do
-    {idx, _} = Integer.parse(index)
     fd = socket.assigns.form_data
-    next = List.delete_at(fd.unimportant_attributes, idx)
-    {:noreply, assign(socket, :form_data, %{fd | unimportant_attributes: next})}
+
+    case parse_list_index(index, fd.unimportant_attributes) do
+      :error ->
+        {:noreply, socket}
+
+      {:ok, idx} ->
+        next = List.delete_at(fd.unimportant_attributes, idx)
+        {:noreply, assign(socket, :form_data, %{fd | unimportant_attributes: next})}
+    end
   end
 
   # ── Keyboard ──────────────────────────────────────────────────────
@@ -398,6 +412,20 @@ defmodule AbyssalwatchWeb.WatchLive do
   end
 
   def handle_event("keydown", _params, socket), do: {:noreply, socket}
+
+  # Parse a phx-value-index sent from the client into a valid 0-based
+  # list index, or :error. Defends against malformed or out-of-range
+  # values reaching List.delete_at.
+  defp parse_list_index(raw, list) when is_binary(raw) do
+    with {idx, ""} <- Integer.parse(raw),
+         true <- idx >= 0 and idx < length(list) do
+      {:ok, idx}
+    else
+      _ -> :error
+    end
+  end
+
+  defp parse_list_index(_, _), do: :error
 
   defp mark_read_now(socket, notification) do
     case Ash.update(notification, %{}, action: :mark_read) do
@@ -922,7 +950,9 @@ defmodule AbyssalwatchWeb.WatchLive do
             <h2 class="text-[15px] font-semibold text-ink-1">
               Your watchlists
               <span class="text-ink-4 font-normal">
-                · {length(@active_list)} active<%= if Enum.any?(@paused_list) do %>, {length(@paused_list)} paused<% end %>
+                · {length(@active_list)} active<%= if Enum.any?(@paused_list) do %>
+                  , {length(@paused_list)} paused
+                <% end %>
               </span>
             </h2>
           </div>
@@ -1160,10 +1190,10 @@ defmodule AbyssalwatchWeb.WatchLive do
           <% end %>
         </div>
         <p class="mt-2 text-[11px] text-ink-3 tnum">
-          <span class="text-ink-2">{@watchlist.match_count || 0}</span> matches
+          <span class="text-ink-2">{@watchlist.match_count || 0}</span>
+          matches
           <%= if @watchlist.last_checked_at do %>
-            <span class="text-ink-4">·</span>
-            checked {time_ago(@watchlist.last_checked_at)}
+            <span class="text-ink-4">·</span> checked {time_ago(@watchlist.last_checked_at)}
           <% end %>
         </p>
       </div>

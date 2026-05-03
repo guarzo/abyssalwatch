@@ -138,7 +138,14 @@ defmodule Abyssalwatch.Accounts.EVEAuth do
         # The "sub" claim contains "CHARACTER:EVE:<character_id>"
         character_id = extract_character_id(claims["sub"])
         character_name = claims["name"]
-        scopes = String.split(claims["scp"] || "", " ")
+
+        scopes =
+          case claims["scp"] do
+            list when is_list(list) -> list
+            str when is_binary(str) -> String.split(str, " ", trim: true)
+            _ -> []
+          end
+
         expires_at = DateTime.from_unix!(claims["exp"])
 
         {:ok,

@@ -82,28 +82,28 @@ defmodule AbyssalwatchWeb.Layouts do
           </li>
           <%= if @current_user do %>
             <li class="dropdown dropdown-end">
-              <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  class="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  />
-                </svg>
-                <span class="hidden sm:inline">{@current_user.email}</span>
+              <div tabindex="0" role="button" class="btn btn-ghost btn-sm gap-2 px-2">
+                <img
+                  src={"https://images.evetech.net/characters/#{@current_user.character_id}/portrait?size=64"}
+                  alt={@current_user.character_name}
+                  class="h-7 w-7 rounded-full ring-1 ring-base-content/20"
+                />
+                <span class="hidden sm:inline">{@current_user.character_name}</span>
               </div>
               <ul
                 tabindex="0"
-                class="dropdown-content menu p-2 shadow bg-base-200 rounded-box w-52 z-50"
+                class="dropdown-content menu p-2 shadow bg-base-200 rounded-box w-56 z-50"
               >
-                <li class="menu-title"><span>{@current_user.email}</span></li>
+                <li class="menu-title">
+                  <span class="flex items-center gap-2">
+                    <img
+                      src={"https://images.evetech.net/characters/#{@current_user.character_id}/portrait?size=64"}
+                      alt={@current_user.character_name}
+                      class="h-6 w-6 rounded-full"
+                    />
+                    {@current_user.character_name}
+                  </span>
+                </li>
                 <li>
                   <a href="/dashboard">
                     <svg

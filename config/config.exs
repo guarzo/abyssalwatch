@@ -9,7 +9,7 @@ import Config
 
 # Register custom MIME types so LiveView's allow_upload accepts these extensions.
 config :mime, :types, %{
-  "text/plain" => ["eft"]
+  "application/vnd.eve.eft" => ["eft"]
 }
 
 config :abyssalwatch,

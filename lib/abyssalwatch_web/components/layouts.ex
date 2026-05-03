@@ -26,7 +26,7 @@ defmodule AbyssalwatchWeb.Layouts do
 
   attr :active, :atom,
     default: nil,
-    doc: "the active nav key, one of :search, :optimize, :dashboard, :watchlists, :notifications"
+    doc: "the active nav key, one of :search, :optimize, :watch"
 
   attr :inner_content, :any, default: nil, doc: "the inner content (when used as layout)"
   slot :inner_block, doc: "inner block slot (when used as component)"
@@ -42,11 +42,7 @@ defmodule AbyssalwatchWeb.Layouts do
       <nav class="topbar-nav" aria-label="Primary">
         <.nav_link href="/search" active={@active == :search}>Search</.nav_link>
         <.nav_link href="/optimize" active={@active == :optimize}>Optimize</.nav_link>
-        <.nav_link href="/dashboard" active={@active == :dashboard}>Dashboard</.nav_link>
-        <.nav_link href="/watchlists" active={@active == :watchlists}>Watchlists</.nav_link>
-        <.nav_link href="/notifications" active={@active == :notifications}>
-          Notifications
-        </.nav_link>
+        <.nav_link href="/watch" active={@active == :watch}>Watch</.nav_link>
       </nav>
 
       <div class="flex items-center gap-2">
@@ -98,22 +94,10 @@ defmodule AbyssalwatchWeb.Layouts do
       </summary>
       <div class="absolute right-0 mt-2 w-56 panel py-1 shadow-[var(--shadow-popover)] z-40">
         <a
-          href="/dashboard"
+          href="/watch"
           class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1"
         >
-          <.icon name="hero-squares-2x2" class="size-4 text-ink-3" /> Dashboard
-        </a>
-        <a
-          href="/watchlists"
-          class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1"
-        >
-          <.icon name="hero-bell-alert" class="size-4 text-ink-3" /> Watchlists
-        </a>
-        <a
-          href="/notifications"
-          class="flex items-center gap-2 px-3 py-2 text-sm text-ink-2 hover:bg-surface-2 hover:text-ink-1"
-        >
-          <.icon name="hero-inbox" class="size-4 text-ink-3" /> Notifications
+          <.icon name="hero-bell-alert" class="size-4 text-ink-3" /> Watch
         </a>
         <div class="my-1 border-t border-rule-1"></div>
         <.link

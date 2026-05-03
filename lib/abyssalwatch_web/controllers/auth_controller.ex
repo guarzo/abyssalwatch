@@ -39,7 +39,7 @@ defmodule AbyssalwatchWeb.AuthController do
       |> put_session(:character_id, user.character_id)
       |> configure_session(renew: true)
       |> put_flash(:info, "Welcome, #{user.character_name}!")
-      |> redirect(to: ~p"/dashboard")
+      |> redirect(to: ~p"/watch")
     else
       {:error, reason} ->
         Logger.error("EVE SSO authentication failed: #{inspect(reason)}")
@@ -72,7 +72,7 @@ defmodule AbyssalwatchWeb.AuthController do
     |> put_session(:user_token, token)
     |> configure_session(renew: true)
     |> put_flash(:info, "Successfully signed in!")
-    |> redirect(to: ~p"/dashboard")
+    |> redirect(to: ~p"/watch")
   end
 
   def callback(conn, _params) do

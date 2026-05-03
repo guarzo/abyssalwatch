@@ -593,6 +593,10 @@ defmodule AbyssalwatchWeb.OptimizationLive do
       phx-window-keydown="keydown"
       class="flex flex-col gap-6"
     >
+      <header :if={is_nil(@fitting)} class="-mb-2">
+        <span class="sidebar-kicker">Optimize</span>
+      </header>
+
       <.fitting_strip
         fitting={@fitting}
         eft_input={@eft_input}
@@ -692,15 +696,20 @@ defmodule AbyssalwatchWeb.OptimizationLive do
       </div>
     <% else %>
       <div class="panel">
-        <div class="px-5 py-5">
-          <div class="flex items-baseline justify-between mb-3">
-            <h2 class="text-[15px] font-semibold text-ink-1">
-              Paste an EFT to begin
+        <div class="px-6 py-6 sm:px-8 sm:py-8">
+          <div class="flex items-baseline justify-between mb-4 gap-4">
+            <h2 class="text-mono-display text-[28px] sm:text-[36px] leading-tight">
+              Paste a fit<span class="text-mono-display-tail">.</span>
             </h2>
-            <label class="text-[12px] text-ink-3 hover:text-ink-1 cursor-pointer">
+            <label class="text-[12px] text-ink-3 hover:text-ink-1 cursor-pointer whitespace-nowrap">
               Or upload .eft <.live_file_input upload={@uploads.eft_file} class="sr-only" />
             </label>
           </div>
+
+          <p class="text-ink-3 text-[13px] mb-3 max-w-[60ch]">
+            EFT-format fitting export. The optimizer fills every abyssal slot with the best
+            mutaplasmid roll the market can offer under your CPU/PG/Cal/budget constraints.
+          </p>
 
           <form phx-change="update_eft_input" phx-submit="parse_eft" id="eft-form">
             <textarea
@@ -836,7 +845,7 @@ defmodule AbyssalwatchWeb.OptimizationLive do
       aria-disabled={@disabled}
     >
       <div class="panel-header">
-        <h2 class="text-[13px] font-semibold uppercase tracking-wider text-ink-3">Tune</h2>
+        <span class="sidebar-kicker">Tune</span>
         <span class="text-[11px] text-ink-4 tnum">
           {if @fitting, do: "ready", else: "load a fit"}
         </span>

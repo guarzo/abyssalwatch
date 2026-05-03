@@ -21,7 +21,7 @@ defmodule AbyssalwatchWeb.AuthLive do
      socket
      |> assign(:state, state)
      |> assign(:error, session["error"])
-     |> assign(:return_to, session["return_to"] || "/dashboard")}
+     |> assign(:return_to, session["return_to"] || "/watch")}
   end
 
   @impl true

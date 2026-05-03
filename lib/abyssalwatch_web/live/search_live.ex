@@ -613,15 +613,28 @@ defmodule AbyssalwatchWeb.SearchLive do
     end
   end
 
-  # Stable per-row DOM id used by phx-click/value-id. Falls back to a
-  # composite key when the source module has no id.
+  # Stable per-row DOM id used by phx-click/value-id. Mutamarket may
+  # return multiple rolls per contract and modules without a unique :id;
+  # we tail every id with a phash of the *module map* (not the full
+  # entry) so the id is stable across rescoring — entry includes the
+  # transient :score which would otherwise change with every criteria
+  # tweak and break LiveView's phx-update tracking.
   defp module_dom_id(%{module: m}) do
-    raw =
-      m[:id] || m[:contract_id] || m[:contract_url] || m[:name] || m.name ||
-        :erlang.phash2(m)
+    base =
+      first_present([
+        m[:id],
+        m[:contract_id],
+        m[:contract_url]
+      ]) || "x"
 
-    "row-" <> (raw |> to_string() |> String.replace(~r/[^A-Za-z0-9_-]/, "_"))
+    "row-#{base}-#{:erlang.phash2(m)}"
+    |> String.replace(~r/[^A-Za-z0-9_-]/, "_")
   end
+
+  defp first_present([]), do: nil
+  defp first_present([nil | rest]), do: first_present(rest)
+  defp first_present(["" | rest]), do: first_present(rest)
+  defp first_present([v | _]), do: v
 
   defp filter_chip_summary(filters, attribute_filters) do
     price = if filters.min_price || filters.max_price, do: 1, else: 0
@@ -712,7 +725,7 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp format_score(_), do: "—"
 
   defp watch_url(module_type, filters) do
-    base = [{"action", "new"}, {"type_id", to_string(module_type.eve_type_id)}]
+    base = [{"new", "1"}, {"type_id", to_string(module_type.eve_type_id)}]
 
     optional =
       [
@@ -722,7 +735,7 @@ defmodule AbyssalwatchWeb.SearchLive do
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
       |> Enum.map(fn {k, v} -> {k, to_string(v)} end)
 
-    "/watchlists?" <> URI.encode_query(base ++ optional)
+    "/watch?" <> URI.encode_query(base ++ optional)
   end
 
   defp decimal_to_param(nil), do: nil
@@ -749,6 +762,12 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp profile_label("conservative"), do: "Conservative"
   defp profile_label("aggressive"), do: "Aggressive"
   defp profile_label(other), do: other |> to_string() |> String.capitalize()
+
+  # Compact label for the segmented sidebar chip (3-col grid).
+  defp profile_label_short("default"), do: "Balanced"
+  defp profile_label_short("conservative"), do: "Safe"
+  defp profile_label_short("aggressive"), do: "Hot"
+  defp profile_label_short(other), do: profile_label(other)
 
   # ── Render ──────────────────────────────────────────────────────────
 
@@ -797,7 +816,7 @@ defmodule AbyssalwatchWeb.SearchLive do
           <% @loading and Enum.empty?(@modules) -> %>
             <.results_skeleton />
           <% is_nil(@selected_type) and Enum.empty?(@modules) -> %>
-            <.empty_initial recent_searches={@recent_searches} />
+            <.empty_initial recent_searches={@recent_searches} module_types={@module_types} />
           <% Enum.empty?(@modules) and Enum.any?(@raw_modules) -> %>
             <.empty_filtered active_filter_count={@active_filter_count} />
           <% Enum.empty?(@modules) -> %>
@@ -809,6 +828,7 @@ defmodule AbyssalwatchWeb.SearchLive do
               sort_order={@sort_order}
               top_entry={@top_entry}
               selected_module={@selected_module}
+              selected_type={@selected_type}
             />
         <% end %>
       </div>
@@ -840,9 +860,7 @@ defmodule AbyssalwatchWeb.SearchLive do
     ~H"""
     <aside class="panel self-start lg:sticky lg:top-[72px] max-h-[calc(100vh-72px)] overflow-y-auto">
       <div class="panel-header">
-        <h2 class="text-[13px] font-semibold uppercase tracking-wider text-ink-3">
-          Search
-        </h2>
+        <span class="sidebar-kicker">Filters</span>
         <span :if={@active_filter_count > 0} class="text-[11px] text-ink-3 tnum">
           {@active_filter_count} active
         </span>
@@ -868,15 +886,9 @@ defmodule AbyssalwatchWeb.SearchLive do
 
         <div>
           <span class="field-label">Scoring profile</span>
-          <form phx-change="update_criteria" class="grid grid-cols-3 gap-1 mt-1">
+          <form phx-change="update_criteria" class="grid grid-cols-3 gap-1.5 mt-1">
             <%= for profile <- ~w(default conservative aggressive) do %>
-              <label class={[
-                "text-[12px] text-center py-1.5 border rounded-md cursor-pointer transition-colors",
-                if(@criteria_preset == profile,
-                  do: "bg-surface-3 text-ink-1 border-rule-strong",
-                  else: "text-ink-3 border-rule-1 hover:text-ink-1 hover:border-rule-2"
-                )
-              ]}>
+              <label class={["profile-chip", @criteria_preset == profile && "is-active"]}>
                 <input
                   type="radio"
                   name="preset"
@@ -884,11 +896,23 @@ defmodule AbyssalwatchWeb.SearchLive do
                   checked={@criteria_preset == profile}
                   class="sr-only"
                 />
-                {profile_label(profile)}
+                {profile_label_short(profile)}
+                <div class="weight-bars" aria-hidden="true">
+                  <%= for {weight, idx} <- profile_weights(profile) |> Enum.with_index() do %>
+                    <div
+                      class={[
+                        "weight-bars-bar",
+                        @criteria_preset == profile && weight >= 0.4 && "is-strong",
+                        @criteria_preset == profile && weight < 0.4 && "is-active"
+                      ]}
+                      style={"height: #{round(weight * 100)}%"}
+                    />
+                  <% end %>
+                </div>
               </label>
             <% end %>
           </form>
-          <p class="mt-1.5 text-[11px] text-ink-4 leading-snug">
+          <p class="mt-2 text-[11px] text-ink-4 leading-snug">
             {profile_hint(@criteria_preset)}
           </p>
         </div>
@@ -1026,6 +1050,14 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp profile_hint("aggressive"), do: "Heavier weight on damage and range."
   defp profile_hint(_), do: ""
 
+  # Illustrative weight summary for the segmented profile chips: three
+  # bars representing [price, attributes, fit]. Not the exact Criteria
+  # weights — directional, for visual feedback only.
+  defp profile_weights("default"), do: [0.50, 0.50, 0.50]
+  defp profile_weights("conservative"), do: [0.85, 0.40, 0.55]
+  defp profile_weights("aggressive"), do: [0.30, 0.85, 0.45]
+  defp profile_weights(_), do: [0.30, 0.30, 0.30]
+
   # ── Results header ───────────────────────────────────────────────────
 
   attr :selected_type, :any, required: true
@@ -1036,27 +1068,27 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp results_header(assigns) do
     ~H"""
-    <.header>
-      {if @selected_type, do: @selected_type.name, else: "Search"}
-      <:subtitle>
-        <%= cond do %>
-          <% is_nil(@selected_type) -> %>
-            Find and score abyssal modules from live Mutamarket listings.
-          <% Enum.empty?(@raw_modules) and not @loading -> %>
-            No fetch yet. Pick a type and search.
-          <% true -> %>
-            <span class="tnum">{length(@modules)}</span>
-            <%= if length(@modules) != length(@raw_modules) do %>
-              of <span class="tnum">{length(@raw_modules)}</span> results
-            <% else %>
-              results
-            <% end %>
-            <span :if={@fetched_at} class={["ml-1", stale?(@fetched_at) && "text-status-training"]}>
-              · {time_ago(@fetched_at)}
-            </span>
-        <% end %>
-      </:subtitle>
-    </.header>
+    <%= if @selected_type do %>
+      <.header>
+        {@selected_type.name}
+        <:subtitle>
+          <%= cond do %>
+            <% Enum.empty?(@raw_modules) and not @loading -> %>
+              No fetch yet. Pick a type and search.
+            <% true -> %>
+              <span class="tnum">{length(@modules)}</span>
+              <%= if length(@modules) != length(@raw_modules) do %>
+                of <span class="tnum">{length(@raw_modules)}</span> results
+              <% else %>
+                results
+              <% end %>
+              <span :if={@fetched_at} class={["ml-1", stale?(@fetched_at) && "text-status-training"]}>
+                · {time_ago(@fetched_at)}
+              </span>
+          <% end %>
+        </:subtitle>
+      </.header>
+    <% end %>
     """
   end
 
@@ -1086,46 +1118,146 @@ defmodule AbyssalwatchWeb.SearchLive do
   end
 
   attr :recent_searches, :list, required: true
+  attr :module_types, :list, default: []
 
   defp empty_initial(assigns) do
-    ~H"""
-    <div class="panel">
-      <div class="px-6 py-12 text-center">
-        <p class="text-ink-1 text-[15px]">Pick a module type to begin.</p>
-        <p class="text-ink-3 text-[13px] mt-1">
-          Choose a type in the sidebar, then search Mutamarket for live listings.
-        </p>
-      </div>
+    quick = Enum.take(assigns.module_types, 4)
+    assigns = assign(assigns, :quick_hunts, quick)
 
-      <%= if Enum.any?(@recent_searches) do %>
-        <div class="border-t border-rule-1 px-2 py-2">
-          <div class="px-4 py-2 text-[11px] uppercase tracking-wider text-ink-3 font-medium">
-            Recent
-          </div>
-          <ul>
-            <%= for s <- Enum.take(@recent_searches, 5) do %>
-              <li>
-                <button
-                  type="button"
-                  phx-click="load_recent"
-                  phx-value-type_id={s.type_id}
-                  class="w-full flex items-center justify-between gap-4 px-4 py-2.5 text-left hover:bg-surface-2 rounded-md transition-colors"
-                >
-                  <span class="flex items-center gap-2 min-w-0">
-                    <span class="text-ink-3 text-[12px]" aria-hidden="true">▸</span>
-                    <span class="text-ink-1 text-sm truncate">{s.type_name}</span>
-                    <span class="text-ink-4 text-[11px]">· {profile_label(s.preset)}</span>
-                  </span>
-                  <span class="text-ink-4 text-[11px] tnum shrink-0">
-                    {time_ago(s.searched_at)}
-                  </span>
-                </button>
-              </li>
-            <% end %>
-          </ul>
+    ~H"""
+    <section class="hero">
+      <%!-- Decorative attribute-radar art. Behind the headline, far right.
+            Five-axis polygon stack at low opacity — visual signature, not chrome. --%>
+      <svg class="hero-art" viewBox="-160 -160 320 320" aria-hidden="true">
+        <defs>
+          <radialGradient id="hero-art-fill" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="oklch(0.72 0.13 280)" stop-opacity="0.35" />
+            <stop offset="100%" stop-color="oklch(0.72 0.13 280)" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <%!-- Concentric pentagons (radar grid) --%>
+        <%= for r <- [40, 80, 120, 150] do %>
+          <polygon
+            points={radar_grid_points(r)}
+            fill="none"
+            stroke="oklch(0.46 0.007 250)"
+            stroke-width="0.5"
+            opacity="0.6"
+          />
+        <% end %>
+        <%!-- Axis lines --%>
+        <%= for {x, y} <- radar_axes() do %>
+          <line x1="0" y1="0" x2={x} y2={y} stroke="oklch(0.38 0.006 250)" stroke-width="0.5" />
+        <% end %>
+        <%!-- A representative "great roll" polygon, indigo-filled --%>
+        <polygon
+          points={radar_data_points([0.94, 0.78, 0.88, 0.62, 0.91])}
+          fill="url(#hero-art-fill)"
+          stroke="oklch(0.80 0.14 280)"
+          stroke-width="1.25"
+          opacity="0.85"
+        />
+        <%!-- Vertex dots --%>
+        <%= for {x, y} <- radar_vertex_dots([0.94, 0.78, 0.88, 0.62, 0.91]) do %>
+          <circle cx={x} cy={y} r="2.25" fill="oklch(0.80 0.14 280)" />
+        <% end %>
+        <%!-- A weaker, amber comparison polygon — represents median --%>
+        <polygon
+          points={radar_data_points([0.55, 0.50, 0.58, 0.45, 0.52])}
+          fill="none"
+          stroke="oklch(0.82 0.16 70)"
+          stroke-width="0.75"
+          stroke-dasharray="2 3"
+          opacity="0.55"
+        />
+      </svg>
+
+      <div class="hero-kicker">Mutamarket · Live</div>
+
+      <h1 class="text-mono-display hero-headline">
+        Hunt the abyss<span class="text-mono-display-tail">.</span>
+      </h1>
+
+      <p class="hero-sub">
+        Score every mutaplasmid roll on the market against your fitting profile.
+        Pick a module type and start fishing — the radar shows you why a number is what it is.
+      </p>
+
+      <%= if Enum.any?(@quick_hunts) do %>
+        <div class="quick-hunts">
+          <span class="quick-hunts-label">Quick start</span>
+          <%= for t <- @quick_hunts do %>
+            <button
+              type="button"
+              phx-click="select_type"
+              phx-value-type_id={t.eve_type_id}
+              class="quick-hunt"
+              title={"Search " <> t.name}
+            >
+              <span class="quick-hunt-glyph" aria-hidden="true">▸</span>
+              <span>{t.name}</span>
+            </button>
+          <% end %>
         </div>
       <% end %>
-    </div>
+    </section>
+
+    <section class="how-strip" aria-label="How AbyssalWatch works">
+      <div class="how-step">
+        <div class="how-step-num">01</div>
+        <h3 class="how-step-title">Pick a hull profile</h3>
+        <p class="how-step-body">
+          Default, Conservative, or Aggressive scoring weights — or tune the criteria
+          by attribute for the fit you're actually flying.
+        </p>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">02</div>
+        <h3 class="how-step-title">Score the market</h3>
+        <p class="how-step-body">
+          We pull live Mutamarket listings and run TOPSIS against your weights.
+          Every roll gets a number you can compare.
+        </p>
+      </div>
+      <div class="how-step">
+        <div class="how-step-num">03</div>
+        <h3 class="how-step-title">Watch for deals</h3>
+        <p class="how-step-body">
+          Save a watchlist and we'll ping Discord when a roll above your threshold
+          shows up below median price.
+        </p>
+      </div>
+    </section>
+
+    <%= if Enum.any?(@recent_searches) do %>
+      <section class="panel mt-6">
+        <header class="panel-header">
+          <h2 class="text-meta">Recent</h2>
+          <span class="text-micro">{length(@recent_searches)} hunts</span>
+        </header>
+        <ul>
+          <%= for s <- Enum.take(@recent_searches, 5) do %>
+            <li>
+              <button
+                type="button"
+                phx-click="load_recent"
+                phx-value-type_id={s.type_id}
+                class="w-full flex items-center justify-between gap-4 px-4 py-2.5 text-left hover:bg-surface-2 transition-colors first:rounded-t-[10px] last:rounded-b-[10px]"
+              >
+                <span class="flex items-center gap-2 min-w-0">
+                  <span class="text-ink-3 text-[12px]" aria-hidden="true">▸</span>
+                  <span class="text-ink-1 text-sm truncate">{s.type_name}</span>
+                  <span class="text-ink-4 text-[11px]">· {profile_label(s.preset)}</span>
+                </span>
+                <span class="text-ink-4 text-[11px] tnum shrink-0">
+                  {time_ago(s.searched_at)}
+                </span>
+              </button>
+            </li>
+          <% end %>
+        </ul>
+      </section>
+    <% end %>
     """
   end
 
@@ -1200,8 +1332,25 @@ defmodule AbyssalwatchWeb.SearchLive do
   attr :sort_order, :string, required: true
   attr :top_entry, :any, required: true
   attr :selected_module, :any, required: true
+  attr :selected_type, :any, default: nil
 
   defp results_table(assigns) do
+    median_price = compute_median_price(assigns.modules)
+    radar_attrs = pick_radar_attributes(assigns.modules)
+    attr_ranges = compute_attr_ranges(assigns.modules, radar_attrs)
+    attr_directions = compute_attr_directions(assigns.selected_type, radar_attrs)
+
+    {s_tier, rest} = partition_s_tier(assigns.modules)
+
+    assigns =
+      assigns
+      |> assign(:median_price, median_price)
+      |> assign(:radar_attrs, radar_attrs)
+      |> assign(:attr_ranges, attr_ranges)
+      |> assign(:attr_directions, attr_directions)
+      |> assign(:s_tier_modules, s_tier)
+      |> assign(:rest_modules, rest)
+
     ~H"""
     <div class="panel overflow-hidden">
       <table class="dense">
@@ -1260,63 +1409,156 @@ defmodule AbyssalwatchWeb.SearchLive do
           </tr>
         </thead>
         <tbody>
-          <%= for entry <- @modules do %>
-            <% module = entry.module
-            score = entry.score
-            row_id = module_dom_id(entry)
-            is_top = @top_entry == entry
-            is_selected = @selected_module && module_dom_id(@selected_module) == row_id %>
-            <tr
-              id={row_id}
-              phx-click="select_row"
-              phx-value-id={row_id}
-              class={[
-                "cursor-pointer",
-                is_selected && "is-selected"
-              ]}
-            >
-              <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
-                <%= if is_top do %>
-                  ▸
-                <% else %>
-                <% end %>
-              </td>
-              <td>
-                <div class="font-medium text-ink-1">{module[:name] || module.name}</div>
-                <div class="text-[11px] text-ink-3">
-                  {module[:type_name] || module[:source_type_name] || module.type_name}
-                </div>
-              </td>
-              <td class={["text-right", (score || 0) >= 0.85 && "is-strong"]}>
-                <div class="inline-flex items-center justify-end gap-2">
-                  <span class="tnum text-ink-1">
-                    {format_score(score)}
-                  </span>
-                  <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
-                    <span
-                      class="block h-full bg-accent"
-                      style={"width: #{round((score || 0) * 100)}%"}
-                    />
-                  </span>
-                </div>
-              </td>
-              <td class="text-right tnum">
-                {format_price(module[:price] || module.price)}
-              </td>
-              <td>
-                <div class="text-[11px] text-ink-3 truncate max-w-[280px]">
-                  <%= for {{attr, value}, idx} <- Enum.with_index(Enum.take(module[:attributes] || module.attributes || %{}, 3)) do %>
-                    <span :if={idx > 0} class="text-ink-4 mx-1.5">·</span>
-                    <span>{humanize(attr)}</span>
-                    <span class="text-ink-2 tnum ml-1">{format_attribute_value(value)}</span>
-                  <% end %>
-                </div>
+          <%!-- S-tier section: rows scoring >= 0.85, set apart with a mono label divider. --%>
+          <%= if Enum.any?(@s_tier_modules) do %>
+            <tr class="s-tier-divider" aria-hidden="true">
+              <td colspan="5">
+                <span class="s-tier-divider-label">
+                  S-tier · {length(@s_tier_modules)} match{if length(@s_tier_modules) == 1,
+                    do: "",
+                    else: "es"}
+                </span>
               </td>
             </tr>
+            <%= for entry <- @s_tier_modules do %>
+              <.result_row
+                entry={entry}
+                top_entry={@top_entry}
+                selected_module={@selected_module}
+                median_price={@median_price}
+                radar_attrs={@radar_attrs}
+                attr_ranges={@attr_ranges}
+                attr_directions={@attr_directions}
+                s_tier={true}
+              />
+            <% end %>
+            <%= if Enum.any?(@rest_modules) do %>
+              <tr class="s-tier-divider" aria-hidden="true">
+                <td colspan="5">
+                  <span class="s-tier-divider-label" style="--accent-line-color: var(--rule-strong);">
+                    Rest · {length(@rest_modules)}
+                  </span>
+                </td>
+              </tr>
+            <% end %>
+          <% end %>
+
+          <%= for entry <- @rest_modules do %>
+            <.result_row
+              entry={entry}
+              top_entry={@top_entry}
+              selected_module={@selected_module}
+              median_price={@median_price}
+              radar_attrs={@radar_attrs}
+              attr_ranges={@attr_ranges}
+              attr_directions={@attr_directions}
+              s_tier={false}
+            />
           <% end %>
         </tbody>
       </table>
     </div>
+    """
+  end
+
+  attr :entry, :any, required: true
+  attr :top_entry, :any, required: true
+  attr :selected_module, :any, required: true
+  attr :median_price, :any, required: true
+  attr :radar_attrs, :list, required: true
+  attr :attr_ranges, :map, required: true
+  attr :attr_directions, :map, default: %{}
+  attr :s_tier, :boolean, required: true
+
+  defp result_row(assigns) do
+    module = assigns.entry.module
+    score = assigns.entry.score
+    row_id = module_dom_id(assigns.entry)
+    is_top = assigns.top_entry == assigns.entry
+
+    is_selected =
+      assigns.selected_module && module_dom_id(assigns.selected_module) == row_id
+
+    price = module[:price] || module.price
+    is_deal = price_below?(price, assigns.median_price)
+
+    radar_values =
+      radar_normalize(module, assigns.radar_attrs, assigns.attr_ranges, assigns.attr_directions)
+
+    assigns =
+      assigns
+      |> assign(:module, module)
+      |> assign(:score, score)
+      |> assign(:row_id, row_id)
+      |> assign(:is_top, is_top)
+      |> assign(:is_selected, is_selected)
+      |> assign(:price, price)
+      |> assign(:is_deal, is_deal)
+      |> assign(:radar_values, radar_values)
+      |> assign(:radar_polygon, radar_data_points(radar_values))
+
+    ~H"""
+    <tr
+      id={@row_id}
+      phx-click="select_row"
+      phx-value-id={@row_id}
+      class={[
+        "cursor-pointer",
+        @is_selected && "is-selected"
+      ]}
+    >
+      <td class="text-center text-ink-3 text-[11px]" aria-hidden="true">
+        <%= if @is_top do %>
+          ▸
+        <% else %>
+        <% end %>
+      </td>
+      <td>
+        <div class="font-medium text-ink-1">{@module[:name] || @module.name}</div>
+        <div class="text-[11px] text-ink-3">
+          {@module[:type_name] || @module[:source_type_name] || @module.type_name}
+        </div>
+      </td>
+      <td class={["text-right", (@score || 0) >= 0.85 && "is-strong"]}>
+        <div class="inline-flex items-center justify-end gap-2">
+          <span class="tnum text-ink-1">
+            {format_score(@score)}
+          </span>
+          <%= if Enum.any?(@radar_values) do %>
+            <svg
+              class={["score-radar", @s_tier && "is-s-tier"]}
+              viewBox="-160 -160 320 320"
+              aria-hidden="true"
+            >
+              <polygon points={radar_grid_points(150)} class="score-radar-grid" />
+              <polygon points={@radar_polygon} class="score-radar-shape" />
+            </svg>
+          <% else %>
+            <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
+              <span
+                class="block h-full bg-accent"
+                style={"width: #{round((@score || 0) * 100)}%"}
+              />
+            </span>
+          <% end %>
+        </div>
+      </td>
+      <td class="text-right tnum">
+        <div class="inline-flex items-center justify-end gap-2">
+          <span :if={@is_deal} class="pill-deal" title="Below median price">Deal</span>
+          {format_price(@price)}
+        </div>
+      </td>
+      <td>
+        <div class="text-[11px] text-ink-3 truncate max-w-[280px]">
+          <%= for {{attr, value}, idx} <- Enum.with_index(Enum.take(@module[:attributes] || @module.attributes || %{}, 3)) do %>
+            <span :if={idx > 0} class="text-ink-4 mx-1.5">·</span>
+            <span>{humanize(attr)}</span>
+            <span class="text-ink-2 tnum ml-1">{format_attribute_value(value)}</span>
+          <% end %>
+        </div>
+      </td>
+    </tr>
     """
   end
 
@@ -1523,4 +1765,214 @@ defmodule AbyssalwatchWeb.SearchLive do
   end
 
   defp format_attribute_value(value), do: to_string(value)
+
+  # ── Hero radar geometry ────────────────────────────────────────────
+  # Five-axis radar plotted on a 320×320 viewBox centered at (0,0).
+  # Axis 0 is up (-y), then clockwise. Used by the empty-state hero art.
+
+  @radar_axes_count 5
+  @radar_max_radius 150
+
+  defp radar_grid_points(radius) do
+    values = for _ <- 1..@radar_axes_count, do: 1.0
+    radar_polygon_points(values, radius: radius)
+  end
+
+  defp radar_data_points(values) when is_list(values) do
+    radar_polygon_points(values, radius: @radar_max_radius)
+  end
+
+  defp radar_polygon_points(values, opts) do
+    radius = Keyword.fetch!(opts, :radius)
+
+    values
+    |> radar_coords(radius)
+    |> Enum.map_join(" ", fn {x, y} -> "#{x},#{y}" end)
+  end
+
+  defp radar_axes do
+    radar_coords(List.duplicate(1.0, @radar_axes_count), @radar_max_radius)
+  end
+
+  defp radar_vertex_dots(values), do: radar_coords(values, @radar_max_radius)
+
+  defp radar_coords(values, radius) do
+    values
+    |> Enum.with_index()
+    |> Enum.map(fn {v, i} ->
+      angle = -:math.pi() / 2 + i * (2 * :math.pi() / @radar_axes_count)
+      r = v * radius
+      x = r * :math.cos(angle)
+      y = r * :math.sin(angle)
+      {Float.round(x, 2), Float.round(y, 2)}
+    end)
+  end
+
+  # ── Per-row analytics for the results table ────────────────────────
+  # Median, top-N attribute selection, normalization for the score-radar.
+
+  defp compute_median_price([]), do: nil
+
+  defp compute_median_price(modules) do
+    prices =
+      modules
+      |> Enum.map(fn %{module: m} -> m[:price] || m.price end)
+      |> Enum.map(&price_to_float/1)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.sort()
+
+    case length(prices) do
+      0 -> nil
+      n when rem(n, 2) == 1 -> Enum.at(prices, div(n, 2))
+      n -> (Enum.at(prices, div(n, 2) - 1) + Enum.at(prices, div(n, 2))) / 2
+    end
+  end
+
+  defp price_to_float(nil), do: nil
+  defp price_to_float(%Decimal{} = d), do: Decimal.to_float(d)
+  defp price_to_float(n) when is_number(n), do: n * 1.0
+  defp price_to_float(_), do: nil
+
+  defp price_below?(nil, _), do: false
+  defp price_below?(_, nil), do: false
+
+  defp price_below?(price, median) do
+    case price_to_float(price) do
+      nil -> false
+      f -> f < median
+    end
+  end
+
+  # Partition results into "standout" S-tier and the rest. The naive
+  # threshold (score >= 0.85) over-fires when the upstream feed is
+  # uniformly high-scoring (every roll an S-tier removes the signal),
+  # so we cap S-tier at 10% of the result set or 25 rows, whichever is
+  # smaller. Below 8 results, no partition — the divider would be noise.
+  defp partition_s_tier(modules) when length(modules) < 8, do: {[], modules}
+
+  defp partition_s_tier(modules) do
+    n = length(modules)
+    cap = min(25, max(1, div(n, 10)))
+    sorted = Enum.sort_by(modules, fn %{score: s} -> s || 0 end, :desc)
+
+    case Enum.take(sorted, cap) do
+      [] ->
+        {[], modules}
+
+      candidates ->
+        # Only call them S-tier if they actually clear the absolute bar.
+        s_tier = Enum.filter(candidates, fn %{score: s} -> (s || 0) >= 0.85 end)
+
+        if Enum.empty?(s_tier) do
+          {[], modules}
+        else
+          ids = MapSet.new(Enum.map(s_tier, & &1))
+          rest = Enum.reject(modules, &MapSet.member?(ids, &1))
+          # Preserve the user's chosen sort within s_tier.
+          ordered = Enum.filter(modules, &MapSet.member?(ids, &1))
+          {ordered, rest}
+        end
+    end
+  end
+
+  # Pick up to 5 attributes that are most commonly present across the
+  # result set. Used as the radar's axes — keeps the visual stable as
+  # the user changes scoring/filters within a single result set.
+  defp pick_radar_attributes([]), do: []
+
+  defp pick_radar_attributes(modules) do
+    modules
+    |> Enum.flat_map(fn %{module: m} ->
+      attrs = m[:attributes] || m.attributes || %{}
+      Map.keys(attrs)
+    end)
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {_k, count} -> -count end)
+    |> Enum.take(5)
+    |> Enum.map(fn {k, _} -> k end)
+  end
+
+  # For each picked attribute, compute the {min, max} numeric range
+  # across the result set so per-row values can be normalized to 0..1.
+  defp compute_attr_ranges([], _attrs), do: %{}
+
+  defp compute_attr_ranges(modules, attrs) do
+    Enum.reduce(attrs, %{}, fn attr, acc ->
+      values =
+        modules
+        |> Enum.map(fn %{module: m} ->
+          attrs_map = m[:attributes] || m.attributes || %{}
+          numeric_attr_value(Map.get(attrs_map, attr))
+        end)
+        |> Enum.reject(&is_nil/1)
+
+      case values do
+        [] -> Map.put(acc, attr, {0.0, 1.0})
+        [single] -> Map.put(acc, attr, {single, single})
+        list -> Map.put(acc, attr, {Enum.min(list), Enum.max(list)})
+      end
+    end)
+  end
+
+  # Map a per-row {attr -> value} pair onto a 0..1 normalized list of
+  # length len(attrs), in the same order as `attrs`. Constant attributes
+  # (range collapsed to a point) emit 0.5 — neutral — to avoid spikes.
+  # For "lower_better" attributes (e.g. cpu_usage, activation_cost), the
+  # normalized ratio is inverted so a smaller raw value still produces a
+  # longer spoke — visually consistent with "more spoke = better".
+  defp radar_normalize(_module, [], _ranges, _directions), do: []
+
+  defp radar_normalize(module, attrs, ranges, directions) do
+    attrs_map = module[:attributes] || module.attributes || %{}
+
+    Enum.map(attrs, fn attr ->
+      value = numeric_attr_value(Map.get(attrs_map, attr))
+      {min_v, max_v} = Map.get(ranges, attr, {0.0, 1.0})
+
+      cond do
+        is_nil(value) ->
+          0.0
+
+        max_v == min_v ->
+          0.5
+
+        true ->
+          ratio = max(0.0, min(1.0, (value - min_v) / (max_v - min_v)))
+
+          case Map.get(directions, attr, "higher_better") do
+            "lower_better" -> 1.0 - ratio
+            _ -> ratio
+          end
+      end
+    end)
+  end
+
+  # Build an attribute -> direction map for the picked radar axes from
+  # the selected module type's metadata. Falls back to higher_better for
+  # any attribute not in the metadata.
+  defp compute_attr_directions(nil, _attrs), do: %{}
+
+  defp compute_attr_directions(module_type, attrs) do
+    base_attrs = module_type.base_attributes || %{}
+
+    Enum.reduce(attrs, %{}, fn attr, acc ->
+      key = to_string(attr)
+      direction = get_in(base_attrs, [key, "direction"]) || "higher_better"
+      Map.put(acc, attr, direction)
+    end)
+  end
+
+  defp numeric_attr_value(nil), do: nil
+  defp numeric_attr_value(v) when is_number(v), do: v * 1.0
+  defp numeric_attr_value(%{"value" => v}), do: numeric_attr_value(v)
+  defp numeric_attr_value(%{value: v}), do: numeric_attr_value(v)
+
+  defp numeric_attr_value(v) when is_binary(v) do
+    case Float.parse(v) do
+      {f, _} -> f
+      :error -> nil
+    end
+  end
+
+  defp numeric_attr_value(_), do: nil
 end

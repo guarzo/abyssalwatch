@@ -37,17 +37,29 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
     SDEFixture.write_zip(fixture_zip, %{
       "types.jsonl" =>
         SDEFixture.jsonl([
+          # Real abyssal module — should be seeded.
           %{
             "_key" => 47702,
             "name" => %{"en" => "Abyssal Stasis Webifier"},
             "groupID" => 65,
             "metaGroupID" => 15,
             "published" => true
+          },
+          # Mutaplasmid consumable — same metaGroupID=15 but in
+          # categoryID 17, so the filter must reject it. If this leaks
+          # through, type_count will be 2 and the assertion below fails.
+          %{
+            "_key" => 85_673,
+            "name" => %{"en" => "Glorified Unstable Vorton Tuning System Mutaplasmid"},
+            "groupID" => 1964,
+            "metaGroupID" => 15,
+            "published" => true
           }
         ]),
       "groups.jsonl" =>
         SDEFixture.jsonl([
-          %{"_key" => 65, "name" => %{"en" => "Stasis Web"}, "categoryID" => 7}
+          %{"_key" => 65, "name" => %{"en" => "Stasis Web"}, "categoryID" => 7},
+          %{"_key" => 1964, "name" => %{"en" => "Mutaplasmids"}, "categoryID" => 17}
         ]),
       "typeDogma.jsonl" => "",
       "dogmaAttributes.jsonl" => ""

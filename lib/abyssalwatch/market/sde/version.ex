@@ -22,8 +22,8 @@ defmodule Abyssalwatch.Market.SDE.Version do
       public?(true)
     end
 
-    attribute :etag, :string, public?: true
-    attribute :last_modified, :utc_datetime, public?: true
+    attribute(:etag, :string, public?: true)
+    attribute(:last_modified, :utc_datetime, public?: true)
 
     attribute :seeded_at, :utc_datetime do
       allow_nil?(false)
@@ -37,11 +37,11 @@ defmodule Abyssalwatch.Market.SDE.Version do
   end
 
   actions do
-    defaults [:read]
+    defaults([:read])
 
     create :upsert do
-      accept [:id, :build_number, :etag, :last_modified, :seeded_at, :type_count]
-      upsert? true
+      accept([:id, :build_number, :etag, :last_modified, :seeded_at, :type_count])
+      upsert?(true)
     end
   end
 end

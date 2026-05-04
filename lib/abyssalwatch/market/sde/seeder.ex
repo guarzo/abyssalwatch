@@ -42,27 +42,56 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
   }
 
   @group_categories %{
-    52 => "Tackle", 65 => "Tackle",
-    59 => "Damage", 205 => "Damage", 302 => "Damage",
-    367 => "Damage", 1988 => "Damage",
-    60 => "Tank", 515 => "Capital",
-    46 => "Propulsion", 58 => "Propulsion",
-    774 => "Shield", 77 => "Shield",
-    62 => "Armor", 98 => "Armor",
-    326 => "Armor", 1150 => "Armor"
+    52 => "Tackle",
+    65 => "Tackle",
+    59 => "Damage",
+    205 => "Damage",
+    302 => "Damage",
+    367 => "Damage",
+    1988 => "Damage",
+    60 => "Tank",
+    515 => "Capital",
+    46 => "Propulsion",
+    58 => "Propulsion",
+    774 => "Shield",
+    77 => "Shield",
+    62 => "Armor",
+    98 => "Armor",
+    326 => "Armor",
+    1150 => "Armor"
   }
 
   @fallback_types [
     %{eve_type_id: 47702, name: "Abyssal Stasis Webifier", category: "Tackle", slot_type: :med},
     %{eve_type_id: 47732, name: "Abyssal Warp Scrambler", category: "Tackle", slot_type: :med},
     %{eve_type_id: 47736, name: "Abyssal Warp Disruptor", category: "Tackle", slot_type: :med},
-    %{eve_type_id: 49722, name: "Abyssal Magnetic Field Stabilizer", category: "Damage", slot_type: :low},
+    %{
+      eve_type_id: 49722,
+      name: "Abyssal Magnetic Field Stabilizer",
+      category: "Damage",
+      slot_type: :low
+    },
     %{eve_type_id: 49726, name: "Abyssal Heat Sink", category: "Damage", slot_type: :low},
     %{eve_type_id: 49730, name: "Abyssal Gyrostabilizer", category: "Damage", slot_type: :low},
-    %{eve_type_id: 49734, name: "Abyssal Entropic Radiation Sink", category: "Damage", slot_type: :low},
-    %{eve_type_id: 49738, name: "Abyssal Ballistic Control System", category: "Damage", slot_type: :low},
+    %{
+      eve_type_id: 49734,
+      name: "Abyssal Entropic Radiation Sink",
+      category: "Damage",
+      slot_type: :low
+    },
+    %{
+      eve_type_id: 49738,
+      name: "Abyssal Ballistic Control System",
+      category: "Damage",
+      slot_type: :low
+    },
     %{eve_type_id: 52227, name: "Abyssal Damage Control", category: "Tank", slot_type: :low},
-    %{eve_type_id: 52230, name: "Abyssal Assault Damage Control", category: "Tank", slot_type: :low},
+    %{
+      eve_type_id: 52230,
+      name: "Abyssal Assault Damage Control",
+      category: "Tank",
+      slot_type: :low
+    },
     %{eve_type_id: 56313, name: "Abyssal Siege Module", category: "Capital", slot_type: :high}
   ]
 
@@ -85,7 +114,9 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
         attrs = Map.put(type, :base_attributes, %{})
 
         case Ash.create(ModuleType, attrs, upsert?: true, upsert_identity: :unique_eve_type_id) do
-          {:ok, _} -> {ok + 1, err}
+          {:ok, _} ->
+            {ok + 1, err}
+
           {:error, error} ->
             Logger.warning("fallback seed failed for #{type.name}: #{inspect(error)}")
             {ok, err + 1}
@@ -107,8 +138,14 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
     {type_dogma, dogma_attrs} = pass3_collect_dogma(handle, ref_types_by_group)
 
     Enum.reduce(abyssal_types, {0, 0}, fn {type_id, type_data}, {ok, err} ->
-      case seed_module_type(type_id, type_data, groups, dogma_attrs, type_dogma,
-             ref_types_by_group) do
+      case seed_module_type(
+             type_id,
+             type_data,
+             groups,
+             dogma_attrs,
+             type_dogma,
+             ref_types_by_group
+           ) do
         :ok -> {ok + 1, err}
         :error -> {ok, err + 1}
       end
@@ -206,7 +243,9 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
     }
 
     case Ash.create(ModuleType, attrs, upsert?: true, upsert_identity: :unique_eve_type_id) do
-      {:ok, _} -> :ok
+      {:ok, _} ->
+        :ok
+
       {:error, error} ->
         Logger.warning("SDE upsert failed for #{name} (#{type_id}): #{inspect(error)}")
         :error
@@ -257,7 +296,8 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
 
   defp base_attributes_for(group_id, dogma_attrs, type_dogma, ref_types_by_group) do
     case Map.get(ref_types_by_group, group_id) do
-      nil -> %{}
+      nil ->
+        %{}
 
       ref_id ->
         type_attrs = (type_dogma[ref_id] || %{})["dogmaAttributes"] || []
@@ -269,6 +309,7 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
           attr_meta = dogma_attrs[attr_id] || %{}
           attr_name = @key_attributes[attr_id]
           direction = if attr_meta["highIsGood"], do: :higher_better, else: :lower_better
+
           display_name =
             get_in(attr_meta, ["displayName", "en"]) || attr_meta["name"] || attr_name
 

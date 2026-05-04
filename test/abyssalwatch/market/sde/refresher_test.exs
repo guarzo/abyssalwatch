@@ -10,7 +10,7 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
   end
 
   test "skips download when build_number matches stored marker" do
-    seed_marker(build_number: 3328718, type_count: 50)
+    seed_marker(build_number: 3_328_718, type_count: 50)
 
     Req.Test.stub(Downloader, fn conn ->
       assert conn.method == "HEAD"
@@ -22,7 +22,7 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
     end)
 
     assert Refresher.run() == :up_to_date
-    assert {:ok, [%{build_number: 3328718}]} = Ash.read(Version)
+    assert {:ok, [%{build_number: 3_328_718}]} = Ash.read(Version)
   end
 
   test "downloads and seeds when marker is missing" do
@@ -39,8 +39,7 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
               "published" => true
             }
           ]),
-        "groups.jsonl" =>
-          SDEFixture.jsonl([%{"_key" => 65, "name" => %{"en" => "Stasis Web"}}]),
+        "groups.jsonl" => SDEFixture.jsonl([%{"_key" => 65, "name" => %{"en" => "Stasis Web"}}]),
         "typeDogma.jsonl" => "",
         "dogmaAttributes.jsonl" => ""
       })

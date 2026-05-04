@@ -22,9 +22,10 @@ defmodule Abyssalwatch.Market.SDE.LoaderTest do
       %{"_key" => 3, "name" => %{"en" => "Gamma"}}
     ]
 
-    zip = SDEFixture.write_zip(Path.join(root, "sde.zip"), %{
-      "types.jsonl" => SDEFixture.jsonl(rows)
-    })
+    zip =
+      SDEFixture.write_zip(Path.join(root, "sde.zip"), %{
+        "types.jsonl" => SDEFixture.jsonl(rows)
+      })
 
     decoded =
       Loader.with_archive(zip, fn handle ->
@@ -47,9 +48,10 @@ defmodule Abyssalwatch.Market.SDE.LoaderTest do
         "\n"
       ) <> "\n"
 
-    zip = SDEFixture.write_zip(Path.join(root, "sde.zip"), %{
-      "types.jsonl" => body
-    })
+    zip =
+      SDEFixture.write_zip(Path.join(root, "sde.zip"), %{
+        "types.jsonl" => body
+      })
 
     {decoded, log} =
       with_log(fn ->
@@ -61,5 +63,4 @@ defmodule Abyssalwatch.Market.SDE.LoaderTest do
     assert decoded == [%{"_key" => 1}, %{"_key" => 2}]
     assert log =~ "skipping malformed JSON"
   end
-
 end

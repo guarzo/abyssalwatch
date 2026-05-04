@@ -3,8 +3,11 @@ defmodule Abyssalwatch.Market.SDE.Loader do
   Streams data from EVE Online SDE (Static Data Export) zipped JSONL files.
 
   Open an archive once with `with_archive/2`, then pull entries lazily via
-  `stream_entry/2`. The whole archive never lives in RAM — entries are read
-  from the file-backed handle on demand and decoded line by line.
+  `stream_entry/2`. The archive index is held by `:zip`; only one entry's
+  bytes live in RAM at a time, and within an entry consumers see lazily
+  decoded JSON maps via `Stream`. This bounds peak memory to roughly one
+  JSONL file plus whatever working set the seeder chooses to retain —
+  never the full multi-file SDE.
   """
 
   require Logger

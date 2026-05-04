@@ -7,30 +7,37 @@ defmodule Abyssalwatch.Market.SDE.Downloader do
   @latest_url "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip"
 
   @doc """
-  Performs a HEAD request that follows the 302 to the build-numbered URL
-  and returns `{:ok, %{build_number: integer, etag: binary | nil,
+  HEADs the SDE URL **without following the 302**, so we can read the
+  `x-sde-build-number` header that CCP only sets on the redirect response.
+
+  Returns `{:ok, %{build_number: integer | nil, etag: binary | nil,
   last_modified: binary | nil, url: binary}}` or `{:error, term}`.
 
-  Note: the returned `:url` is the constant `@latest_url` (the request URL),
-  not the post-redirect build-numbered URL. `Req.Response` does not expose
-  the resolved final URL as a struct field, and downstream code only needs
-  `build_number`/`etag`/`last_modified` for change detection.
+  Build number resolution order:
+    1. `x-sde-build-number` response header (preferred)
+    2. parsed from the redirect target path (`…-NNNNNNN-jsonl.zip`)
   """
   def head_latest(opts \\ []) do
     req =
-      [method: :head, url: @latest_url, redirect: true]
+      [method: :head, url: @latest_url, redirect: false]
       |> Keyword.merge(req_opts())
       |> Keyword.merge(opts)
       |> Req.new()
 
     case Req.request(req) do
-      {:ok, %Req.Response{status: status, headers: headers}} when status in 200..299 ->
+      {:ok, %Req.Response{status: status, headers: headers}}
+      when status in 200..299 or status in 300..399 ->
+        location = header(headers, "location")
+
         {:ok,
          %{
-           build_number: header(headers, "x-sde-build-number") |> parse_int(),
+           build_number:
+             header(headers, "x-sde-build-number")
+             |> parse_int()
+             |> fallback(fn -> build_number_from_url(location) end),
            etag: header(headers, "etag"),
            last_modified: header(headers, "last-modified"),
-           url: @latest_url
+           url: location || @latest_url
          }}
 
       {:ok, %Req.Response{status: status}} ->
@@ -86,6 +93,20 @@ defmodule Abyssalwatch.Market.SDE.Downloader do
     case Integer.parse(s) do
       {n, _} -> n
       :error -> nil
+    end
+  end
+
+  defp fallback(nil, fun), do: fun.()
+  defp fallback(value, _fun), do: value
+
+  # Extracts NNNNNNN from a path like
+  # "…/eve-online-static-data-3328718-jsonl.zip".
+  defp build_number_from_url(nil), do: nil
+
+  defp build_number_from_url(url) when is_binary(url) do
+    case Regex.run(~r/static-data-(\d+)-jsonl\.zip/, url) do
+      [_, n] -> String.to_integer(n)
+      _ -> nil
     end
   end
 end

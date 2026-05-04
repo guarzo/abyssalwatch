@@ -61,6 +61,10 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
 
   defp head_or_log do
     case Downloader.head_latest() do
+      {:ok, %{build_number: nil}} ->
+        Logger.warning("SDE HEAD returned no build_number; cannot proceed")
+        {:error, :missing_build_number}
+
       {:ok, head} = ok ->
         Logger.info("SDE HEAD: build #{head.build_number}")
         ok
@@ -83,15 +87,21 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
   defp compare(_, _), do: :stale
 
   defp with_advisory_lock(fun) do
-    Repo.checkout(fn ->
-      Repo.query!("SELECT pg_advisory_lock($1)", [@advisory_lock_key])
-
-      try do
+    # Transaction-scoped lock: works through transaction-pooled connections
+    # (Supabase pgbouncer on :6543) because the lock and its release ride
+    # on the same DB transaction regardless of which backend the pooler
+    # hands the next call. Released automatically on commit/rollback.
+    Repo.transaction(
+      fn ->
+        Repo.query!("SELECT pg_advisory_xact_lock($1)", [@advisory_lock_key])
         fun.()
-      after
-        Repo.query!("SELECT pg_advisory_unlock($1)", [@advisory_lock_key])
-      end
-    end)
+      end,
+      timeout: :infinity
+    )
+    |> case do
+      {:ok, result} -> result
+      {:error, reason} -> raise "advisory-locked transaction failed: #{inspect(reason)}"
+    end
   end
 
   defp download_and_seed(head) do

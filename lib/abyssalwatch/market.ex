@@ -4,5 +4,6 @@ defmodule Abyssalwatch.Market do
   resources do
     resource(Abyssalwatch.Market.Module)
     resource(Abyssalwatch.Market.ModuleType)
+    resource(Abyssalwatch.Market.SDE.Version)
   end
 end

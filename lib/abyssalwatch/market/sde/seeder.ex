@@ -177,6 +177,16 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
     end)
   end
 
+  # The SDE marks every Abyssal (mutated) module variant with
+  # `metaGroupID == 15` in `metaGroups.jsonl`. Filtering on the meta-group
+  # is robust; filtering on the English name prefix misses common cases
+  # like "50MN Abyssal Microwarpdrive" and "Large Abyssal Shield Booster".
+  @abyssal_meta_group_id 15
+
+  # T2 reference modules have metaGroupID == 2; we use one per group as
+  # the source of truth for base attributes the abyssal variant inherits.
+  @t2_meta_group_id 2
+
   defp pass1_collect_types(handle) do
     handle
     |> Loader.stream_entry("types.jsonl")
@@ -185,12 +195,13 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
       name = get_in(t, ["name", "en"]) || ""
       type_id = t["_key"]
       group_id = t["groupID"]
+      meta = t["metaGroupID"]
 
       cond do
-        published? and abyssal_name?(name) and not excluded_name?(name) ->
+        published? and meta == @abyssal_meta_group_id and not excluded_name?(name) ->
           {Map.put(abyssal, type_id, t), refs}
 
-        published? and t["metaGroupID"] == 2 and not String.starts_with?(name, "Abyssal") ->
+        published? and meta == @t2_meta_group_id ->
           {abyssal, Map.put_new(refs, group_id, type_id)}
 
         true ->
@@ -237,8 +248,6 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
 
     {type_dogma, dogma_attrs}
   end
-
-  defp abyssal_name?(name), do: String.starts_with?(name, "Abyssal ")
 
   defp excluded_name?(name) do
     String.contains?(name, "Blueprint") or

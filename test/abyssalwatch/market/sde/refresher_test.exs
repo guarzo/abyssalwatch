@@ -92,6 +92,74 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
     assert Refresher.run() == :error
   end
 
+  test "prunes ModuleType rows that are no longer in the SDE filter result" do
+    # Pre-seed a row that wouldn't match the current SDE filter (a leftover
+    # mutaplasmid from an earlier broken-filter deploy).
+    {:ok, _stale} =
+      Ash.create(
+        Abyssalwatch.Market.ModuleType,
+        %{
+          eve_type_id: 85_673,
+          name: "Glorified Unstable Vorton Tuning System Mutaplasmid",
+          category: "Other",
+          slot_type: :med,
+          base_attributes: %{}
+        },
+        upsert?: true,
+        upsert_identity: :unique_eve_type_id
+      )
+
+    fixture_zip =
+      Path.join(
+        System.tmp_dir!(),
+        "sde-prune-fixture-#{System.unique_integer([:positive])}.zip"
+      )
+
+    on_exit(fn -> File.rm(fixture_zip) end)
+
+    SDEFixture.write_zip(fixture_zip, %{
+      "types.jsonl" =>
+        SDEFixture.jsonl([
+          %{
+            "_key" => 47702,
+            "name" => %{"en" => "Abyssal Stasis Webifier"},
+            "groupID" => 65,
+            "metaGroupID" => 15,
+            "published" => true
+          }
+        ]),
+      "groups.jsonl" =>
+        SDEFixture.jsonl([
+          %{"_key" => 65, "name" => %{"en" => "Stasis Web"}, "categoryID" => 7}
+        ]),
+      "typeDogma.jsonl" => "",
+      "dogmaAttributes.jsonl" => ""
+    })
+
+    fixture_body = File.read!(fixture_zip)
+
+    Req.Test.stub(Downloader, fn conn ->
+      cond do
+        conn.method == "HEAD" ->
+          conn
+          |> Plug.Conn.put_resp_header("x-sde-build-number", "888888")
+          |> Plug.Conn.send_resp(200, "")
+
+        conn.method == "GET" ->
+          conn
+          |> Plug.Conn.put_resp_header("content-type", "application/zip")
+          |> Plug.Conn.send_resp(200, fixture_body)
+      end
+    end)
+
+    assert {:ok, %{build_number: 888_888, type_count: 1}} = Refresher.run()
+
+    {:ok, remaining} = Ash.read(Abyssalwatch.Market.ModuleType)
+    eve_type_ids = Enum.map(remaining, & &1.eve_type_id)
+    assert 47_702 in eve_type_ids
+    refute 85_673 in eve_type_ids
+  end
+
   defp seed_marker(attrs) do
     base = %{
       id: 1,

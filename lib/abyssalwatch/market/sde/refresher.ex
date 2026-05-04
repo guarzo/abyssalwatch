@@ -1,8 +1,18 @@
 defmodule Abyssalwatch.Market.SDE.Refresher do
   @moduledoc """
   Boot-time orchestrator: HEAD the SDE URL, compare build_number against
-  the stored marker, download + seed if stale. Multi-machine safe via a
-  Postgres advisory lock.
+  the stored marker, download + seed if stale.
+
+  No cross-machine locking. The race is benign: if two machines deploy
+  simultaneously they may each download the SDE zip (~80 MB once per
+  build, weeks apart) and re-run the seed. The seed upserts by
+  `:unique_eve_type_id` and the marker upsert is idempotent, so the
+  duplicate work is wasted bandwidth, not corruption. Trying to add a
+  Postgres advisory lock on top of a transaction-pooled Supabase
+  connection (port 6543) was actively harmful: locks acquired on one
+  pooled backend can't be released by another, and wrapping the seed
+  in `Repo.transaction` to scope the lock caused a single bad row to
+  roll back hundreds of good upserts.
 
   All failures are caught and logged. The function never raises.
   """
@@ -10,9 +20,6 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
   require Logger
 
   alias Abyssalwatch.Market.SDE.{Downloader, Seeder, Version}
-  alias Abyssalwatch.Repo
-
-  @advisory_lock_key :erlang.phash2(:sde_refresh)
 
   @doc """
   Runs one refresh pass. Returns:
@@ -43,12 +50,7 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
     with {:ok, head} <- head_or_log(),
          marker = current_marker(),
          :stale <- compare(marker, head) do
-      with_advisory_lock(fn ->
-        case compare(current_marker(), head) do
-          :match -> :up_to_date
-          :stale -> download_and_seed(head)
-        end
-      end)
+      download_and_seed(head)
     else
       :match ->
         Logger.info("SDE up to date (build #{(current_marker() || %{}).build_number})")
@@ -61,6 +63,10 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
 
   defp head_or_log do
     case Downloader.head_latest() do
+      {:ok, %{build_number: nil}} ->
+        Logger.warning("SDE HEAD returned no build_number; cannot proceed")
+        {:error, :missing_build_number}
+
       {:ok, head} = ok ->
         Logger.info("SDE HEAD: build #{head.build_number}")
         ok
@@ -81,18 +87,6 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
   defp compare(nil, _head), do: :stale
   defp compare(%{build_number: b}, %{build_number: b}), do: :match
   defp compare(_, _), do: :stale
-
-  defp with_advisory_lock(fun) do
-    Repo.checkout(fn ->
-      Repo.query!("SELECT pg_advisory_lock($1)", [@advisory_lock_key])
-
-      try do
-        fun.()
-      after
-        Repo.query!("SELECT pg_advisory_unlock($1)", [@advisory_lock_key])
-      end
-    end)
-  end
 
   defp download_and_seed(head) do
     tmp = Path.join(System.tmp_dir!(), "sde-#{head.build_number}.zip")

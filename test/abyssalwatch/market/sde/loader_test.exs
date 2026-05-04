@@ -1,7 +1,7 @@
 defmodule Abyssalwatch.Market.SDE.LoaderTest do
   use ExUnit.Case, async: true
 
-  import ExUnit.CaptureLog, only: [capture_log: 1]
+  import ExUnit.CaptureLog
 
   alias Abyssalwatch.Market.SDE.Loader
   alias Abyssalwatch.SDEFixture
@@ -62,17 +62,4 @@ defmodule Abyssalwatch.Market.SDE.LoaderTest do
     assert log =~ "skipping malformed JSON"
   end
 
-  defp with_log(fun) do
-    parent = self()
-    ref = make_ref()
-
-    log =
-      capture_log(fn ->
-        send(parent, {ref, fun.()})
-      end)
-
-    receive do
-      {^ref, value} -> {value, log}
-    end
-  end
 end

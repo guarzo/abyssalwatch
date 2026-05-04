@@ -27,7 +27,7 @@ defmodule Abyssalwatch.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [precommit: :test, test: :test]
     ]
   end
 
@@ -100,7 +100,8 @@ defmodule Abyssalwatch.MixProject do
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      "test.setup": ["ecto.create --quiet", "ecto.migrate --quiet"],
+      test: ["test.setup", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind abyssalwatch", "esbuild abyssalwatch"],
       "assets.deploy": [
@@ -108,7 +109,12 @@ defmodule Abyssalwatch.MixProject do
         "esbuild abyssalwatch --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "cmd sh -c 'MIX_ENV=test mix compile --warnings-as-errors'",
+        "deps.unlock --unused",
+        "format",
+        "cmd sh -c 'MIX_ENV=test mix test'"
+      ]
     ]
   end
 end

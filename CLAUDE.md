@@ -15,10 +15,13 @@ mix phx.server         # Start Phoenix server (http://localhost:4000)
 mix precommit          # Run before committing: compile --warnings-as-errors, unlock unused deps, format, test
 
 # Testing
-mix test               # Run all tests
-mix test path/to/test.exs        # Run single test file
-mix test path/to/test.exs:42     # Run test at specific line
-mix test --failed                # Re-run failed tests
+# Use `mix precommit` to run the full gate (it sets MIX_ENV=test internally).
+# For ad-hoc test runs, set MIX_ENV explicitly — Mix's automatic env-switch
+# for `mix test` does not work in this project (alias interaction).
+MIX_ENV=test mix test                            # Run all tests
+MIX_ENV=test mix test path/to/test.exs           # Run single test file
+MIX_ENV=test mix test path/to/test.exs:42        # Run test at specific line
+MIX_ENV=test mix test --failed                   # Re-run failed tests
 
 # Database
 mix ecto.migrate       # Run migrations

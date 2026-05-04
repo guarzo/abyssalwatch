@@ -45,7 +45,10 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
             "published" => true
           }
         ]),
-      "groups.jsonl" => SDEFixture.jsonl([%{"_key" => 65, "name" => %{"en" => "Stasis Web"}}]),
+      "groups.jsonl" =>
+        SDEFixture.jsonl([
+          %{"_key" => 65, "name" => %{"en" => "Stasis Web"}, "categoryID" => 7}
+        ]),
       "typeDogma.jsonl" => "",
       "dogmaAttributes.jsonl" => ""
     })

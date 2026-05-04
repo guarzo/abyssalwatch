@@ -152,14 +152,19 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
   end
 
   defp do_streaming_seed(handle) do
-    {abyssal_types, ref_types_by_group} = pass1_collect_types(handle)
+    # Pre-pass: groups.jsonl is small (~3000 entries) and gives us
+    # group_id => %{name, categoryID}. We need this both to filter abyssal
+    # types by category in pass1 and to derive slot_type / category labels
+    # later, so we materialize it once up front.
+    groups = collect_all_groups(handle)
+
+    {abyssal_types, ref_types_by_group} = pass1_collect_types(handle, groups)
 
     Logger.info(
-      "SDE: found #{map_size(abyssal_types)} abyssal types, " <>
+      "SDE: found #{map_size(abyssal_types)} abyssal modules, " <>
         "#{map_size(ref_types_by_group)} reference types"
     )
 
-    groups = pass2_collect_groups(handle, abyssal_types, ref_types_by_group)
     {type_dogma, dogma_attrs} = pass3_collect_dogma(handle, ref_types_by_group)
 
     Enum.reduce(abyssal_types, {0, 0}, fn {type_id, type_data}, {ok, err} ->
@@ -178,49 +183,46 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
   end
 
   # The SDE marks every Abyssal (mutated) module variant with
-  # `metaGroupID == 15` in `metaGroups.jsonl`. Filtering on the meta-group
-  # is robust; filtering on the English name prefix misses common cases
-  # like "50MN Abyssal Microwarpdrive" and "Large Abyssal Shield Booster".
+  # `metaGroupID == 15`. That meta-group also contains the *mutaplasmid
+  # consumables* (categoryID 17) which look like modules but aren't —
+  # they have a different attribute schema and would fail upserts.
+  # Filtering on category ∈ {Module, Drone} keeps only what MutaMarket
+  # actually trades.
   @abyssal_meta_group_id 15
+  @module_category_ids MapSet.new([7, 18])
 
   # T2 reference modules have metaGroupID == 2; we use one per group as
   # the source of truth for base attributes the abyssal variant inherits.
   @t2_meta_group_id 2
 
-  defp pass1_collect_types(handle) do
+  defp collect_all_groups(handle) do
+    handle
+    |> Loader.stream_entry("groups.jsonl")
+    |> Enum.reduce(%{}, fn g, acc -> Map.put(acc, g["_key"], g) end)
+  end
+
+  defp pass1_collect_types(handle, groups) do
     handle
     |> Loader.stream_entry("types.jsonl")
     |> Enum.reduce({%{}, %{}}, fn t, {abyssal, refs} ->
       published? = t["published"] == true
-      name = get_in(t, ["name", "en"]) || ""
       type_id = t["_key"]
       group_id = t["groupID"]
       meta = t["metaGroupID"]
+      category_id = get_in(groups, [group_id, "categoryID"])
+      module_category? = MapSet.member?(@module_category_ids, category_id)
 
       cond do
-        published? and meta == @abyssal_meta_group_id and not excluded_name?(name) ->
+        published? and meta == @abyssal_meta_group_id and module_category? ->
           {Map.put(abyssal, type_id, t), refs}
 
-        published? and meta == @t2_meta_group_id ->
+        published? and meta == @t2_meta_group_id and module_category? ->
           {abyssal, Map.put_new(refs, group_id, type_id)}
 
         true ->
           {abyssal, refs}
       end
     end)
-  end
-
-  defp pass2_collect_groups(handle, abyssal_types, ref_types_by_group) do
-    needed_group_ids =
-      MapSet.new(
-        Enum.map(abyssal_types, fn {_id, t} -> t["groupID"] end) ++
-          Map.keys(ref_types_by_group)
-      )
-
-    handle
-    |> Loader.stream_entry("groups.jsonl")
-    |> Stream.filter(&MapSet.member?(needed_group_ids, &1["_key"]))
-    |> Enum.reduce(%{}, fn g, acc -> Map.put(acc, g["_key"], g) end)
   end
 
   defp pass3_collect_dogma(handle, ref_types_by_group) do
@@ -247,15 +249,6 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
       |> Enum.reduce(%{}, fn a, acc -> Map.put(acc, a["_key"], a) end)
 
     {type_dogma, dogma_attrs}
-  end
-
-  defp excluded_name?(name) do
-    String.contains?(name, "Blueprint") or
-      String.contains?(name, "Mining Crystal") or
-      String.contains?(name, "Mining Laser") or
-      String.contains?(name, "Strip Miner") or
-      String.contains?(name, "Deep Core Miner") or
-      String.contains?(name, "Corruption")
   end
 
   defp seed_module_type(type_id, type_data, groups, dogma_attrs, type_dogma, ref_types_by_group) do

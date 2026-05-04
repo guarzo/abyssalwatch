@@ -55,7 +55,7 @@ defmodule Abyssalwatch.Release do
   @doc "Synchronously runs the SDE refresher (download + seed if stale)."
   def refresh_now do
     start_app()
-    apply(Abyssalwatch.Market.SDE.Refresher, :run, [])
+    Abyssalwatch.Market.SDE.Refresher.run()
   end
 
   defp safe_seed_from_zip(zip_path) do

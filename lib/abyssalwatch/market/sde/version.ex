@@ -42,7 +42,6 @@ defmodule Abyssalwatch.Market.SDE.Version do
     create :upsert do
       accept [:id, :build_number, :etag, :last_modified, :seeded_at, :type_count]
       upsert? true
-      upsert_identity :_primary_key
     end
   end
 end

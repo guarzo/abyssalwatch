@@ -26,6 +26,6 @@ case Seeder.seed_from_sde() do
       mix run priv/repo/seeds.exs
     """)
 
-    {ok_count, err_count} = Seeder.seed_fallback()
+    {:ok, {ok_count, err_count}} = Seeder.seed_fallback()
     IO.puts("\n✅ Seeded #{ok_count} fallback module types (#{err_count} errors)")
 end

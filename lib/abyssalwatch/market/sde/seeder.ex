@@ -120,23 +120,30 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
     end
   end
 
-  @doc "Seed the hardcoded fallback list. Returns `{ok_count, error_count}`."
+  @doc """
+  Seed the hardcoded fallback list.
+
+  Returns `{:ok, {ok_count, error_count}}` for parity with `seed_from_sde/1`.
+  """
   def seed_fallback do
     IO.puts("Seeding #{length(@fallback_types)} fallback module types...")
 
-    Enum.reduce(@fallback_types, {0, 0}, fn type, {ok, err} ->
-      attrs = Map.put(type, :base_attributes, %{})
+    counts =
+      Enum.reduce(@fallback_types, {0, 0}, fn type, {ok, err} ->
+        attrs = Map.put(type, :base_attributes, %{})
 
-      case Ash.create(ModuleType, attrs, upsert?: true, upsert_identity: :unique_eve_type_id) do
-        {:ok, module_type} ->
-          IO.puts("  ✓ #{module_type.name} (#{module_type.eve_type_id})")
-          {ok + 1, err}
+        case Ash.create(ModuleType, attrs, upsert?: true, upsert_identity: :unique_eve_type_id) do
+          {:ok, module_type} ->
+            IO.puts("  ✓ #{module_type.name} (#{module_type.eve_type_id})")
+            {ok + 1, err}
 
-        {:error, error} ->
-          IO.puts("  ✗ Failed: #{type.name} - #{inspect(error)}")
-          {ok, err + 1}
-      end
-    end)
+          {:error, error} ->
+            IO.puts("  ✗ Failed: #{type.name} - #{inspect(error)}")
+            {ok, err + 1}
+        end
+      end)
+
+    {:ok, counts}
   end
 
   defp do_seed_from_sde(types, groups, dogma_attrs, type_dogma) do

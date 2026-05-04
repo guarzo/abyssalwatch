@@ -36,7 +36,7 @@ defmodule Abyssalwatch.Release do
   def seed(sde_path \\ Loader.default_path()) do
     start_app()
 
-    case Seeder.seed_from_sde(sde_path) do
+    case safe_seed_from_sde(sde_path) do
       {:ok, {ok_count, err_count}} ->
         IO.puts("Seeded #{ok_count} module types from SDE (#{err_count} errors)")
         {:ok, {ok_count, err_count}}
@@ -44,7 +44,36 @@ defmodule Abyssalwatch.Release do
       {:error, {:missing_files, missing}} ->
         IO.puts("SDE files missing at #{sde_path}: #{Enum.join(missing, ", ")}")
         IO.puts("Falling back to hardcoded module types.")
-        {ok_count, err_count} = Seeder.seed_fallback()
+        run_fallback()
+
+      {:error, reason} ->
+        IO.puts(
+          "Seeder.seed_from_sde failed at #{sde_path}: #{inspect(reason)}. " <>
+            "Falling back to hardcoded module types."
+        )
+
+        run_fallback()
+    end
+  end
+
+  # Wraps Seeder.seed_from_sde/1 to convert any raised exception (e.g. from
+  # JSON decoding or Ash.create) into a structured `{:error, ...}` so the
+  # caller can fall back gracefully instead of crashing release boot.
+  defp safe_seed_from_sde(sde_path) do
+    Seeder.seed_from_sde(sde_path)
+  rescue
+    exception ->
+      IO.puts(
+        "Seeder.seed_from_sde raised at #{sde_path} (Loader.load_all path): " <>
+          Exception.format(:error, exception, __STACKTRACE__)
+      )
+
+      {:error, {:exception, exception}}
+  end
+
+  defp run_fallback do
+    case Seeder.seed_fallback() do
+      {:ok, {ok_count, err_count}} ->
         IO.puts("Seeded #{ok_count} fallback module types (#{err_count} errors)")
         {:ok, {ok_count, err_count}}
     end

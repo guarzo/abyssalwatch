@@ -71,8 +71,22 @@ defmodule Abyssalwatch.Market.SDE.Loader do
       path
       |> File.stream!()
       |> Stream.map(&String.trim/1)
-      |> Stream.filter(&(&1 != ""))
-      |> Stream.map(&Jason.decode!/1)
+      |> Stream.with_index(1)
+      |> Stream.filter(fn {line, _line_no} -> line != "" end)
+      |> Stream.flat_map(fn {line, line_no} ->
+        case Jason.decode(line) do
+          {:ok, map} ->
+            [map]
+
+          {:error, reason} ->
+            IO.puts(
+              "Warning: skipping malformed JSON in #{filename} at line #{line_no} " <>
+                "(#{path}): #{inspect(reason)}"
+            )
+
+            []
+        end
+      end)
       |> Enum.to_list()
     else
       IO.puts("Warning: #{path} not found.")

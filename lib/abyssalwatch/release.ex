@@ -5,7 +5,7 @@ defmodule Abyssalwatch.Release do
   """
   @app :abyssalwatch
 
-  alias Abyssalwatch.Market.SDE.{Loader, Seeder}
+  alias Abyssalwatch.Market.SDE.Seeder
 
   def migrate do
     load_app()
@@ -21,50 +21,49 @@ defmodule Abyssalwatch.Release do
   end
 
   @doc """
-  Seeds `Abyssalwatch.Market.ModuleType` rows.
+  Seeds `ModuleType` rows.
 
-  Intended to be invoked once after a deploy via:
+  Pass `:default` (the default) to seed from the hardcoded fallback list. Pass
+  a path to an SDE zip to seed from it. Manual escape hatch for ops:
 
-      /app/bin/abyssalwatch eval 'Abyssalwatch.Release.seed()'
-
-  If the EVE SDE files are present at `/tmp/sde/` (or a custom `sde_path`),
-  seeds the full set derived from the SDE. Otherwise falls back to the
-  hardcoded module-type list.
-
-  Returns `{:ok, {ok_count, err_count}}`.
+      /app/bin/abyssalwatch eval 'Abyssalwatch.Release.seed("/tmp/sde.zip")'
   """
-  def seed(sde_path \\ Loader.default_path()) do
+  def seed(path \\ :default) do
     start_app()
 
-    case safe_seed_from_sde(sde_path) do
-      {:ok, {ok_count, err_count}} ->
-        IO.puts("Seeded #{ok_count} module types from SDE (#{err_count} errors)")
-        {:ok, {ok_count, err_count}}
-
-      {:error, {:missing_files, missing}} ->
-        IO.puts("SDE files missing at #{sde_path}: #{Enum.join(missing, ", ")}")
-        IO.puts("Falling back to hardcoded module types.")
+    case path do
+      :default ->
         run_fallback()
 
-      {:error, reason} ->
-        IO.puts(
-          "Seeder.seed_from_sde failed at #{sde_path}: #{inspect(reason)}. " <>
-            "Falling back to hardcoded module types."
-        )
+      zip_path when is_binary(zip_path) ->
+        case safe_seed_from_zip(zip_path) do
+          {:ok, {ok_count, err_count}} ->
+            IO.puts("Seeded #{ok_count} module types from SDE (#{err_count} errors)")
+            {:ok, {ok_count, err_count}}
 
-        run_fallback()
+          {:error, reason} ->
+            IO.puts(
+              "Seeder.seed_from_zip failed at #{zip_path}: #{inspect(reason)}. " <>
+                "Falling back to hardcoded module types."
+            )
+
+            run_fallback()
+        end
     end
   end
 
-  # Wraps Seeder.seed_from_sde/1 to convert any raised exception (e.g. from
-  # JSON decoding or Ash.create) into a structured `{:error, ...}` so the
-  # caller can fall back gracefully instead of crashing release boot.
-  defp safe_seed_from_sde(sde_path) do
-    Seeder.seed_from_sde(sde_path)
+  @doc "Synchronously runs the SDE refresher (download + seed if stale)."
+  def refresh_now do
+    start_app()
+    Abyssalwatch.Market.SDE.Refresher.run()
+  end
+
+  defp safe_seed_from_zip(zip_path) do
+    Seeder.seed_from_zip(zip_path)
   rescue
     exception ->
       IO.puts(
-        "Seeder.seed_from_sde raised at #{sde_path} (Loader.load_all path): " <>
+        "Seeder.seed_from_zip raised at #{zip_path}: " <>
           Exception.format(:error, exception, __STACKTRACE__)
       )
 

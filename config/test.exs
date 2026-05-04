@@ -35,3 +35,8 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+config :abyssalwatch, Abyssalwatch.Market.SDE.Downloader,
+  req_options: [plug: {Req.Test, Abyssalwatch.Market.SDE.Downloader}]
+
+config :abyssalwatch, sde_auto_refresh: false

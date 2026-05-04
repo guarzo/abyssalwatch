@@ -1,27 +1,23 @@
 defmodule Abyssalwatch.Market.SDE.Seeder do
   @moduledoc """
-  Seeds `Abyssalwatch.Market.ModuleType` rows.
+  Seeds `Abyssalwatch.Market.ModuleType` rows from a SDE zip via streaming.
 
-  Two entry points:
+  Public entry points:
 
-    * `seed_from_sde/1` — uses the full SDE under the given path (defaults to
-      `/tmp/sde`). Discovers all published Abyssal module types from the SDE
-      and derives base attributes from a T2 reference module in the same
-      group.
+    * `seed_from_zip/1` — preferred, opens the zip with `Loader.with_archive`
+      and runs the streaming three-pass pipeline below.
+    * `seed_fallback/0` — hardcoded list, used when no SDE is available.
 
-    * `seed_fallback/0` — seeds a hardcoded list of common Abyssal modules
-      with empty `base_attributes`. Used when the SDE files are unavailable.
+  Both upsert by `:unique_eve_type_id` so they are safe to re-run.
 
-  Both upsert by `:unique_eve_type_id`, so they are safe to re-run.
-
-  Returns `{ok_count, error_count}` from each entry point.
+  Returns `{:ok, {ok_count, error_count}}`.
   """
+
+  require Logger
 
   alias Abyssalwatch.Market.ModuleType
   alias Abyssalwatch.Market.SDE.Loader
 
-  # Key attributes commonly modified by mutaplasmids.
-  # Map of EVE dogma attribute ID -> internal attribute name.
   @key_attributes %{
     50 => "cpu",
     30 => "powergrid",
@@ -100,45 +96,54 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
   ]
 
   @doc """
-  Seed from a full SDE on disk. Defaults to `/tmp/sde`.
-
-  Returns `{:ok, {ok_count, error_count}}` on success or
-  `{:error, {:missing_files, [...]}}` if SDE files aren't present.
+  Seed from an SDE zip on disk. Opens the zip, runs the three-pass streaming
+  pipeline, returns `{:ok, {ok_count, err_count}}`.
   """
-  def seed_from_sde(sde_path \\ Loader.default_path()) do
-    case Loader.load_all(sde_path) do
-      {:ok, %{types: types, groups: groups, dogma_attrs: dogma_attrs, type_dogma: type_dogma}} ->
-        IO.puts(
-          "Loaded SDE from #{sde_path}: #{map_size(types)} types, " <>
-            "#{map_size(groups)} groups, #{map_size(dogma_attrs)} dogma attrs"
-        )
+  def seed_from_zip(zip_path) do
+    Loader.with_archive(zip_path, fn handle ->
+      case missing_required_entries(handle) do
+        [] ->
+          {:ok, do_streaming_seed(handle)}
 
-        {:ok, do_seed_from_sde(types, groups, dogma_attrs, type_dogma)}
+        missing ->
+          {:error, {:missing_files, missing}}
+      end
+    end)
+  end
 
-      {:error, _} = err ->
-        err
+  defp missing_required_entries(handle) do
+    case :zip.zip_list_dir(handle) do
+      {:ok, entries} ->
+        names =
+          entries
+          |> Enum.flat_map(fn
+            {:zip_file, name, _info, _comment, _offset, _size} -> [List.to_string(name)]
+            _ -> []
+          end)
+
+        Enum.reject(Loader.required_files(), fn required ->
+          Enum.any?(names, &String.ends_with?(&1, required))
+        end)
+
+      _ ->
+        Loader.required_files()
     end
   end
 
-  @doc """
-  Seed the hardcoded fallback list.
-
-  Returns `{:ok, {ok_count, error_count}}` for parity with `seed_from_sde/1`.
-  """
+  @doc "Seed the hardcoded fallback list."
   def seed_fallback do
-    IO.puts("Seeding #{length(@fallback_types)} fallback module types...")
+    Logger.info("Seeding #{length(@fallback_types)} fallback module types")
 
     counts =
       Enum.reduce(@fallback_types, {0, 0}, fn type, {ok, err} ->
         attrs = Map.put(type, :base_attributes, %{})
 
         case Ash.create(ModuleType, attrs, upsert?: true, upsert_identity: :unique_eve_type_id) do
-          {:ok, module_type} ->
-            IO.puts("  ✓ #{module_type.name} (#{module_type.eve_type_id})")
+          {:ok, _} ->
             {ok + 1, err}
 
           {:error, error} ->
-            IO.puts("  ✗ Failed: #{type.name} - #{inspect(error)}")
+            Logger.warning("fallback seed failed for #{type.name}: #{inspect(error)}")
             {ok, err + 1}
         end
       end)
@@ -146,38 +151,105 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
     {:ok, counts}
   end
 
-  defp do_seed_from_sde(types, groups, dogma_attrs, type_dogma) do
-    abyssal_types = filter_abyssal_types(types)
+  defp do_streaming_seed(handle) do
+    {abyssal_types, ref_types_by_group} = pass1_collect_types(handle)
 
-    IO.puts("Found #{length(abyssal_types)} abyssal module types in SDE")
+    Logger.info(
+      "SDE: found #{map_size(abyssal_types)} abyssal types, " <>
+        "#{map_size(ref_types_by_group)} reference types"
+    )
+
+    groups = pass2_collect_groups(handle, abyssal_types, ref_types_by_group)
+    {type_dogma, dogma_attrs} = pass3_collect_dogma(handle, ref_types_by_group)
 
     Enum.reduce(abyssal_types, {0, 0}, fn {type_id, type_data}, {ok, err} ->
-      case seed_module_type(type_id, type_data, groups, dogma_attrs, type_dogma, types) do
+      case seed_module_type(
+             type_id,
+             type_data,
+             groups,
+             dogma_attrs,
+             type_dogma,
+             ref_types_by_group
+           ) do
         :ok -> {ok + 1, err}
         :error -> {ok, err + 1}
       end
     end)
   end
 
-  defp filter_abyssal_types(types) do
-    types
-    |> Enum.filter(fn {_id, t} ->
+  defp pass1_collect_types(handle) do
+    handle
+    |> Loader.stream_entry("types.jsonl")
+    |> Enum.reduce({%{}, %{}}, fn t, {abyssal, refs} ->
+      published? = t["published"] == true
       name = get_in(t, ["name", "en"]) || ""
-      String.starts_with?(name, "Abyssal ") and t["published"] == true
-    end)
-    |> Enum.reject(fn {_id, t} ->
-      name = get_in(t, ["name", "en"]) || ""
+      type_id = t["_key"]
+      group_id = t["groupID"]
 
-      String.contains?(name, "Blueprint") or
-        String.contains?(name, "Mining Crystal") or
-        String.contains?(name, "Mining Laser") or
-        String.contains?(name, "Strip Miner") or
-        String.contains?(name, "Deep Core Miner") or
-        String.contains?(name, "Corruption")
+      cond do
+        published? and abyssal_name?(name) and not excluded_name?(name) ->
+          {Map.put(abyssal, type_id, t), refs}
+
+        published? and t["metaGroupID"] == 2 and not String.starts_with?(name, "Abyssal") ->
+          {abyssal, Map.put_new(refs, group_id, type_id)}
+
+        true ->
+          {abyssal, refs}
+      end
     end)
   end
 
-  defp seed_module_type(type_id, type_data, groups, dogma_attrs, type_dogma, all_types) do
+  defp pass2_collect_groups(handle, abyssal_types, ref_types_by_group) do
+    needed_group_ids =
+      MapSet.new(
+        Enum.map(abyssal_types, fn {_id, t} -> t["groupID"] end) ++
+          Map.keys(ref_types_by_group)
+      )
+
+    handle
+    |> Loader.stream_entry("groups.jsonl")
+    |> Stream.filter(&MapSet.member?(needed_group_ids, &1["_key"]))
+    |> Enum.reduce(%{}, fn g, acc -> Map.put(acc, g["_key"], g) end)
+  end
+
+  defp pass3_collect_dogma(handle, ref_types_by_group) do
+    needed_ref_ids = MapSet.new(Map.values(ref_types_by_group))
+
+    type_dogma =
+      handle
+      |> Loader.stream_entry("typeDogma.jsonl")
+      |> Stream.filter(&MapSet.member?(needed_ref_ids, &1["_key"]))
+      |> Enum.reduce(%{}, fn td, acc -> Map.put(acc, td["_key"], td) end)
+
+    needed_attr_ids =
+      type_dogma
+      |> Map.values()
+      |> Enum.flat_map(fn td -> td["dogmaAttributes"] || [] end)
+      |> Enum.map(& &1["attributeID"])
+      |> Enum.filter(&Map.has_key?(@key_attributes, &1))
+      |> MapSet.new()
+
+    dogma_attrs =
+      handle
+      |> Loader.stream_entry("dogmaAttributes.jsonl")
+      |> Stream.filter(&MapSet.member?(needed_attr_ids, &1["_key"]))
+      |> Enum.reduce(%{}, fn a, acc -> Map.put(acc, a["_key"], a) end)
+
+    {type_dogma, dogma_attrs}
+  end
+
+  defp abyssal_name?(name), do: String.starts_with?(name, "Abyssal ")
+
+  defp excluded_name?(name) do
+    String.contains?(name, "Blueprint") or
+      String.contains?(name, "Mining Crystal") or
+      String.contains?(name, "Mining Laser") or
+      String.contains?(name, "Strip Miner") or
+      String.contains?(name, "Deep Core Miner") or
+      String.contains?(name, "Corruption")
+  end
+
+  defp seed_module_type(type_id, type_data, groups, dogma_attrs, type_dogma, ref_types_by_group) do
     name = get_in(type_data, ["name", "en"])
     group_id = type_data["groupID"]
     group = groups[group_id]
@@ -185,7 +257,7 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
 
     category = Map.get(@group_categories, group_id, determine_category(name))
     slot_type = determine_slot_type(group_name, name)
-    base_attributes = get_base_attributes(group_id, dogma_attrs, type_dogma, all_types)
+    base_attributes = base_attributes_for(group_id, dogma_attrs, type_dogma, ref_types_by_group)
 
     attrs = %{
       eve_type_id: type_id,
@@ -196,12 +268,11 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
     }
 
     case Ash.create(ModuleType, attrs, upsert?: true, upsert_identity: :unique_eve_type_id) do
-      {:ok, module_type} ->
-        IO.puts("  ✓ #{module_type.name} (#{module_type.eve_type_id}) - #{category}/#{slot_type}")
+      {:ok, _} ->
         :ok
 
       {:error, error} ->
-        IO.puts("  ✗ Failed: #{name} - #{inspect(error)}")
+        Logger.warning("SDE upsert failed for #{name} (#{type_id}): #{inspect(error)}")
         :error
     end
   end
@@ -248,17 +319,12 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
     end
   end
 
-  defp get_base_attributes(group_id, dogma_attrs, type_dogma, all_types) do
-    reference_type =
-      Enum.find(all_types, fn {_id, t} ->
-        t["groupID"] == group_id and
-          t["published"] == true and
-          t["metaGroupID"] == 2 and
-          not String.starts_with?(get_in(t, ["name", "en"]) || "", "Abyssal")
-      end)
+  defp base_attributes_for(group_id, dogma_attrs, type_dogma, ref_types_by_group) do
+    case Map.get(ref_types_by_group, group_id) do
+      nil ->
+        %{}
 
-    case reference_type do
-      {ref_id, _ref_data} ->
+      ref_id ->
         type_attrs = (type_dogma[ref_id] || %{})["dogmaAttributes"] || []
 
         type_attrs
@@ -267,7 +333,6 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
           attr_id = attr["attributeID"]
           attr_meta = dogma_attrs[attr_id] || %{}
           attr_name = @key_attributes[attr_id]
-
           direction = if attr_meta["highIsGood"], do: :higher_better, else: :lower_better
 
           display_name =
@@ -280,9 +345,6 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
             "high_is_good" => attr_meta["highIsGood"]
           })
         end)
-
-      nil ->
-        %{}
     end
   end
 end

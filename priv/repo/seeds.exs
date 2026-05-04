@@ -2,30 +2,19 @@
 #
 # Run with: mix run priv/repo/seeds.exs
 #
-# If the EVE SDE files are present at /tmp/sde, seeds the full set derived from
-# the SDE. Otherwise falls back to a small hardcoded list.
+# If SDE_ZIP env var points to an SDE zip, seeds from it. Otherwise falls back
+# to a small hardcoded list.
 #
 # To download the SDE first:
 #   curl -sL "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip" -o /tmp/sde.zip
-#   unzip -o /tmp/sde.zip -d /tmp/sde/
+#   SDE_ZIP=/tmp/sde.zip mix run priv/repo/seeds.exs
 
-alias Abyssalwatch.Market.SDE.{Loader, Seeder}
+sde_zip = System.get_env("SDE_ZIP")
 
-case Seeder.seed_from_sde() do
-  {:ok, {ok_count, err_count}} ->
-    IO.puts("\n✅ Seeded #{ok_count} module types from SDE (#{err_count} errors)")
+case sde_zip do
+  nil ->
+    {:ok, _} = Abyssalwatch.Market.SDE.Seeder.seed_fallback()
 
-  {:error, {:missing_files, missing}} ->
-    IO.puts("""
-    \n⚠️  SDE files not found at #{Loader.default_path()}. Missing: #{Enum.join(missing, ", ")}
-
-    Falling back to hardcoded module types. To seed from the full SDE, run:
-
-      curl -sL "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip" -o /tmp/sde.zip
-      unzip -o /tmp/sde.zip -d /tmp/sde/
-      mix run priv/repo/seeds.exs
-    """)
-
-    {:ok, {ok_count, err_count}} = Seeder.seed_fallback()
-    IO.puts("\n✅ Seeded #{ok_count} fallback module types (#{err_count} errors)")
+  path ->
+    {:ok, _} = Abyssalwatch.Market.SDE.Seeder.seed_from_zip(path)
 end

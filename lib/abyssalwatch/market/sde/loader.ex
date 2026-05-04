@@ -1,96 +1,122 @@
 defmodule Abyssalwatch.Market.SDE.Loader do
   @moduledoc """
-  Loads data from EVE Online SDE (Static Data Export) JSON Lines files.
+  Streams data from EVE Online SDE (Static Data Export) zipped JSONL files.
 
-  Expects the SDE files to be unzipped at `@default_sde_path` (or a custom
-  path passed in). Used by both `priv/repo/seeds.exs` (dev) and
-  `Abyssalwatch.Release.seed/0` (production).
+  Open an archive once with `with_archive/2`, then pull entries lazily via
+  `stream_entry/2`. The archive index is held by `:zip`; only one entry's
+  bytes live in RAM at a time, and within an entry consumers see lazily
+  decoded JSON maps via `Stream`. This bounds peak memory to roughly one
+  JSONL file plus whatever working set the seeder chooses to retain —
+  never the full multi-file SDE.
   """
 
-  @default_sde_path "/tmp/sde"
+  require Logger
 
   @required_files ~w(types.jsonl groups.jsonl dogmaAttributes.jsonl typeDogma.jsonl)
 
-  @doc "Returns the default SDE path (`/tmp/sde`)."
-  def default_path, do: @default_sde_path
-
-  @doc """
-  Returns the list of files that must exist for `load_all/1` to succeed.
-  """
+  @doc "Returns the list of JSONL files we expect to find inside the SDE zip."
   def required_files, do: @required_files
 
   @doc """
-  Returns the list of required files that are missing under `sde_path`.
+  Opens a SDE zip archive at `zip_path`, passes the handle to `fun`, and
+  closes it afterwards. Returns whatever `fun` returns.
   """
-  def missing_files(sde_path \\ @default_sde_path) do
-    Enum.filter(@required_files, fn file ->
-      not File.exists?(Path.join(sde_path, file))
-    end)
-  end
+  def with_archive(zip_path, fun) when is_function(fun, 1) do
+    case :zip.zip_open(String.to_charlist(zip_path), [:memory]) do
+      {:ok, handle} ->
+        try do
+          fun.(handle)
+        after
+          :zip.zip_close(handle)
+        end
 
-  @doc """
-  Loads all four SDE files and returns
-  `{:ok, %{types: ..., groups: ..., dogma_attrs: ..., type_dogma: ...}}` or
-  `{:error, {:missing_files, [...]}}` if any required file is absent.
-  """
-  def load_all(sde_path \\ @default_sde_path) do
-    case missing_files(sde_path) do
-      [] ->
-        {:ok,
-         %{
-           types: load_types(sde_path),
-           groups: load_groups(sde_path),
-           dogma_attrs: load_dogma_attributes(sde_path),
-           type_dogma: load_type_dogma(sde_path)
-         }}
-
-      missing ->
-        {:error, {:missing_files, missing}}
+      {:error, reason} ->
+        raise "failed to open SDE zip at #{zip_path}: #{inspect(reason)}"
     end
   end
 
-  def load_types(sde_path \\ @default_sde_path), do: read_index(sde_path, "types.jsonl")
-  def load_groups(sde_path \\ @default_sde_path), do: read_index(sde_path, "groups.jsonl")
+  @doc """
+  Returns a `Stream` of decoded JSON maps from `filename` inside the open
+  zip `handle`. Filename matching is suffix-based so nested paths inside
+  the zip (e.g. `eve-online-static-data/types.jsonl`) work.
 
-  def load_dogma_attributes(sde_path \\ @default_sde_path),
-    do: read_index(sde_path, "dogmaAttributes.jsonl")
-
-  def load_type_dogma(sde_path \\ @default_sde_path),
-    do: read_index(sde_path, "typeDogma.jsonl")
-
-  defp read_index(sde_path, filename) do
-    sde_path
-    |> read_jsonl(filename)
-    |> Enum.reduce(%{}, fn item, acc -> Map.put(acc, item["_key"], item) end)
+  Malformed lines are skipped with a warning.
+  """
+  def stream_entry(handle, filename) do
+    Stream.resource(
+      fn -> read_entry_lines(handle, filename) end,
+      fn
+        [] -> {:halt, nil}
+        [line | rest] -> {[line], rest}
+      end,
+      fn _ -> :ok end
+    )
+    |> Stream.with_index(1)
+    |> Stream.flat_map(fn {line, line_no} -> decode_line(line, line_no, filename) end)
   end
 
-  defp read_jsonl(sde_path, filename) do
-    path = Path.join(sde_path, filename)
+  defp read_entry_lines(handle, filename) do
+    case :zip.zip_get(String.to_charlist(filename), handle) do
+      {:ok, {_name, body}} ->
+        split_lines(body)
 
-    if File.exists?(path) do
-      path
-      |> File.stream!()
-      |> Stream.map(&String.trim/1)
-      |> Stream.with_index(1)
-      |> Stream.filter(fn {line, _line_no} -> line != "" end)
-      |> Stream.flat_map(fn {line, line_no} ->
-        case Jason.decode(line) do
-          {:ok, map} ->
-            [map]
-
-          {:error, reason} ->
-            IO.puts(
-              "Warning: skipping malformed JSON in #{filename} at line #{line_no} " <>
-                "(#{path}): #{inspect(reason)}"
-            )
-
+      {:error, _} ->
+        case find_entry(handle, filename) do
+          nil ->
+            Logger.warning("SDE zip is missing #{filename}")
             []
+
+          full_name ->
+            {:ok, {_, body}} = :zip.zip_get(full_name, handle)
+            split_lines(body)
         end
-      end)
-      |> Enum.to_list()
-    else
-      IO.puts("Warning: #{path} not found.")
-      []
+    end
+  end
+
+  defp find_entry(handle, suffix) do
+    suffix_charlist = String.to_charlist("/" <> suffix)
+    plain_charlist = String.to_charlist(suffix)
+
+    case :zip.zip_list_dir(handle) do
+      {:ok, entries} ->
+        Enum.find_value(entries, fn
+          {:zip_file, name, _info, _comment, _offset, _size} ->
+            cond do
+              List.starts_with?(Enum.reverse(name), Enum.reverse(suffix_charlist)) -> name
+              name == plain_charlist -> name
+              true -> nil
+            end
+
+          _ ->
+            nil
+        end)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp split_lines(body) when is_binary(body) do
+    body
+    |> String.split("\n")
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp split_lines(body) when is_list(body) do
+    body |> IO.iodata_to_binary() |> split_lines()
+  end
+
+  defp decode_line(line, line_no, filename) do
+    case Jason.decode(line) do
+      {:ok, map} ->
+        [map]
+
+      {:error, reason} ->
+        Logger.warning(
+          "skipping malformed JSON in #{filename} at line #{line_no}: #{inspect(reason)}"
+        )
+
+        []
     end
   end
 end

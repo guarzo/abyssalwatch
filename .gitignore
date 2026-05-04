@@ -1,7 +1,6 @@
 # Elixir/Phoenix
 /_build/
 /deps/
-/*.lock
 *.ez
 *.beam
 .worktrees

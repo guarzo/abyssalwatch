@@ -7,7 +7,7 @@ defmodule Abyssalwatch.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
+    base_children = [
       AbyssalwatchWeb.Telemetry,
       Abyssalwatch.Repo,
       {DNSCluster, query: Application.get_env(:abyssalwatch, :dns_cluster_query) || :ignore},
@@ -25,10 +25,26 @@ defmodule Abyssalwatch.Application do
       AbyssalwatchWeb.Endpoint
     ]
 
+    children = base_children ++ sde_refresher_child()
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Abyssalwatch.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp sde_refresher_child do
+    if Application.get_env(:abyssalwatch, :sde_auto_refresh, false) do
+      [
+        Supervisor.child_spec(
+          {Task, &Abyssalwatch.Market.SDE.Refresher.run/0},
+          id: :sde_refresher,
+          restart: :temporary
+        )
+      ]
+    else
+      []
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

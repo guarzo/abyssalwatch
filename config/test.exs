@@ -38,3 +38,5 @@ config :phoenix_live_view,
 
 config :abyssalwatch, Abyssalwatch.Market.SDE.Downloader,
   req_options: [plug: {Req.Test, Abyssalwatch.Market.SDE.Downloader}]
+
+config :abyssalwatch, sde_auto_refresh: false

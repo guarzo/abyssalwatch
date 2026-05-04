@@ -1,6 +1,8 @@
 defmodule AbyssalwatchWeb.SearchLive do
   use AbyssalwatchWeb, :live_view
 
+  require Logger
+
   alias Abyssalwatch.Market.ModuleType
   alias Abyssalwatch.Market.Scoring.{Topsis, Criteria}
   alias Abyssalwatch.Market.Mutamarket.Client, as: MutamarketClient
@@ -374,8 +376,19 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp load_module_types do
     case Ash.read(ModuleType) do
-      {:ok, types} -> Enum.sort_by(types, & &1.name)
-      {:error, _} -> []
+      {:ok, []} ->
+        Logger.warning(
+          "SearchLive.load_module_types: ModuleType table is empty — run Abyssalwatch.Release.seed/0"
+        )
+
+        []
+
+      {:ok, types} ->
+        Enum.sort_by(types, & &1.name)
+
+      {:error, error} ->
+        Logger.error("SearchLive.load_module_types failed: #{inspect(error)}")
+        []
     end
   end
 

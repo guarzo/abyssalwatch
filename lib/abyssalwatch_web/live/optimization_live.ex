@@ -13,6 +13,8 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   use AbyssalwatchWeb, :live_view
 
+  require Logger
+
   alias Abyssalwatch.Fittings.Parsers.EFT
   alias Abyssalwatch.Optimization
   alias Abyssalwatch.Optimization.Types.Constraints
@@ -449,8 +451,19 @@ defmodule AbyssalwatchWeb.OptimizationLive do
 
   defp load_module_types do
     case Ash.read(ModuleType) do
-      {:ok, types} -> Enum.sort_by(types, & &1.name)
-      {:error, _} -> []
+      {:ok, []} ->
+        Logger.warning(
+          "OptimizationLive.load_module_types: ModuleType table is empty — run Abyssalwatch.Release.seed/0"
+        )
+
+        []
+
+      {:ok, types} ->
+        Enum.sort_by(types, & &1.name)
+
+      {:error, error} ->
+        Logger.error("OptimizationLive.load_module_types failed: #{inspect(error)}")
+        []
     end
   end
 

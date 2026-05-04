@@ -17,6 +17,7 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
 
   alias Abyssalwatch.Market.ModuleType
   alias Abyssalwatch.Market.SDE.Loader
+  alias Abyssalwatch.Repo
 
   @key_attributes %{
     50 => "cpu",
@@ -167,19 +168,46 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
 
     {type_dogma, dogma_attrs} = pass3_collect_dogma(handle, ref_types_by_group)
 
-    Enum.reduce(abyssal_types, {0, 0}, fn {type_id, type_data}, {ok, err} ->
-      case seed_module_type(
-             type_id,
-             type_data,
-             groups,
-             dogma_attrs,
-             type_dogma,
-             ref_types_by_group
-           ) do
-        :ok -> {ok + 1, err}
-        :error -> {ok, err + 1}
-      end
-    end)
+    counts =
+      Enum.reduce(abyssal_types, {0, 0}, fn {type_id, type_data}, {ok, err} ->
+        case seed_module_type(
+               type_id,
+               type_data,
+               groups,
+               dogma_attrs,
+               type_dogma,
+               ref_types_by_group
+             ) do
+          :ok -> {ok + 1, err}
+          :error -> {ok, err + 1}
+        end
+      end)
+
+    # Reconcile: drop any ModuleType row whose eve_type_id no longer
+    # appears in the SDE-derived set. This keeps the table in sync when
+    # the upstream filter changes (e.g. mutaplasmid rows seeded by an
+    # earlier broken filter) and when CCP retires a module. Only runs
+    # if at least one row was upserted, so a transient empty/failed seed
+    # cannot wipe the table.
+    case counts do
+      {ok_count, _err_count} when ok_count > 0 ->
+        prune_stale(Map.keys(abyssal_types))
+
+      _ ->
+        :ok
+    end
+
+    counts
+  end
+
+  defp prune_stale(current_ids) do
+    import Ecto.Query
+
+    {n, _} =
+      Repo.delete_all(from(m in ModuleType, where: m.eve_type_id not in ^current_ids))
+
+    if n > 0, do: Logger.info("SDE: pruned #{n} stale ModuleType rows")
+    :ok
   end
 
   # The SDE marks every Abyssal (mutated) module variant with

@@ -101,8 +101,33 @@ defmodule Abyssalwatch.Market.SDE.Seeder do
   """
   def seed_from_zip(zip_path) do
     Loader.with_archive(zip_path, fn handle ->
-      {:ok, do_streaming_seed(handle)}
+      case missing_required_entries(handle) do
+        [] ->
+          {:ok, do_streaming_seed(handle)}
+
+        missing ->
+          {:error, {:missing_files, missing}}
+      end
     end)
+  end
+
+  defp missing_required_entries(handle) do
+    case :zip.zip_list_dir(handle) do
+      {:ok, entries} ->
+        names =
+          entries
+          |> Enum.flat_map(fn
+            {:zip_file, name, _info, _comment, _offset, _size} -> [List.to_string(name)]
+            _ -> []
+          end)
+
+        Enum.reject(Loader.required_files(), fn required ->
+          Enum.any?(names, &String.ends_with?(&1, required))
+        end)
+
+      _ ->
+        Loader.required_files()
+    end
   end
 
   @doc "Seed the hardcoded fallback list."

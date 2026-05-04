@@ -6,13 +6,14 @@ defmodule Abyssalwatch.Market.SDE.LoaderTest do
   alias Abyssalwatch.Market.SDE.Loader
   alias Abyssalwatch.SDEFixture
 
-  @tmp_root System.tmp_dir!() |> Path.join("abyssalwatch-loader-test")
-
   setup do
-    File.rm_rf!(@tmp_root)
-    File.mkdir_p!(@tmp_root)
-    on_exit(fn -> File.rm_rf!(@tmp_root) end)
-    {:ok, root: @tmp_root}
+    tmp_root =
+      System.tmp_dir!()
+      |> Path.join("abyssalwatch-loader-test-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(tmp_root)
+    on_exit(fn -> File.rm_rf!(tmp_root) end)
+    {:ok, root: tmp_root}
   end
 
   test "stream_entry yields decoded maps lazily", %{root: root} do

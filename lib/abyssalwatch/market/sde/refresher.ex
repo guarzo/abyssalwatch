@@ -83,13 +83,15 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
   defp compare(_, _), do: :stale
 
   defp with_advisory_lock(fun) do
-    Repo.query!("SELECT pg_advisory_lock($1)", [@advisory_lock_key])
+    Repo.checkout(fn ->
+      Repo.query!("SELECT pg_advisory_lock($1)", [@advisory_lock_key])
 
-    try do
-      fun.()
-    after
-      Repo.query!("SELECT pg_advisory_unlock($1)", [@advisory_lock_key])
-    end
+      try do
+        fun.()
+      after
+        Repo.query!("SELECT pg_advisory_unlock($1)", [@advisory_lock_key])
+      end
+    end)
   end
 
   defp download_and_seed(head) do
@@ -111,27 +113,43 @@ defmodule Abyssalwatch.Market.SDE.Refresher do
 
   defp seed_and_record(head, zip_path) do
     case Seeder.seed_from_zip(zip_path) do
+      {:ok, {ok_count, 0}} ->
+        Logger.info("SDE seeded: #{ok_count} ok, 0 errors")
+        upsert_marker(head, ok_count)
+
       {:ok, {ok_count, err_count}} ->
-        Logger.info("SDE seeded: #{ok_count} ok, #{err_count} errors")
-        last_modified = parse_http_date(head.last_modified)
+        Logger.warning(
+          "SDE partial seed (#{ok_count} ok, #{err_count} errors); " <>
+            "leaving marker unchanged so the next boot retries"
+        )
 
-        attrs = %{
-          id: 1,
-          build_number: head.build_number,
-          etag: head.etag,
-          last_modified: last_modified,
-          seeded_at: DateTime.utc_now() |> DateTime.truncate(:second),
-          type_count: ok_count
-        }
+        :error
 
-        case Ash.create(Version, attrs, action: :upsert, upsert?: true) do
-          {:ok, _} ->
-            {:ok, %{build_number: head.build_number, type_count: ok_count}}
+      {:error, reason} ->
+        Logger.warning("SDE seed_from_zip failed: #{inspect(reason)}")
+        :error
+    end
+  end
 
-          {:error, reason} ->
-            Logger.warning("SDE marker upsert failed: #{inspect(reason)}")
-            :error
-        end
+  defp upsert_marker(head, ok_count) do
+    last_modified = parse_http_date(head.last_modified)
+
+    attrs = %{
+      id: 1,
+      build_number: head.build_number,
+      etag: head.etag,
+      last_modified: last_modified,
+      seeded_at: DateTime.utc_now() |> DateTime.truncate(:second),
+      type_count: ok_count
+    }
+
+    case Ash.create(Version, attrs, action: :upsert, upsert?: true) do
+      {:ok, _} ->
+        {:ok, %{build_number: head.build_number, type_count: ok_count}}
+
+      {:error, reason} ->
+        Logger.warning("SDE marker upsert failed: #{inspect(reason)}")
+        :error
     end
   end
 

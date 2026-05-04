@@ -27,22 +27,28 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
 
   test "downloads and seeds when marker is missing" do
     fixture_zip =
-      Path.join(System.tmp_dir!(), "sde-refresher-fixture.zip")
-      |> SDEFixture.write_zip(%{
-        "types.jsonl" =>
-          SDEFixture.jsonl([
-            %{
-              "_key" => 47702,
-              "name" => %{"en" => "Abyssal Stasis Webifier"},
-              "groupID" => 65,
-              "metaGroupID" => 15,
-              "published" => true
-            }
-          ]),
-        "groups.jsonl" => SDEFixture.jsonl([%{"_key" => 65, "name" => %{"en" => "Stasis Web"}}]),
-        "typeDogma.jsonl" => "",
-        "dogmaAttributes.jsonl" => ""
-      })
+      Path.join(
+        System.tmp_dir!(),
+        "sde-refresher-fixture-#{System.unique_integer([:positive])}.zip"
+      )
+
+    on_exit(fn -> File.rm(fixture_zip) end)
+
+    SDEFixture.write_zip(fixture_zip, %{
+      "types.jsonl" =>
+        SDEFixture.jsonl([
+          %{
+            "_key" => 47702,
+            "name" => %{"en" => "Abyssal Stasis Webifier"},
+            "groupID" => 65,
+            "metaGroupID" => 15,
+            "published" => true
+          }
+        ]),
+      "groups.jsonl" => SDEFixture.jsonl([%{"_key" => 65, "name" => %{"en" => "Stasis Web"}}]),
+      "typeDogma.jsonl" => "",
+      "dogmaAttributes.jsonl" => ""
+    })
 
     fixture_body = File.read!(fixture_zip)
 
@@ -61,8 +67,6 @@ defmodule Abyssalwatch.Market.SDE.RefresherTest do
     end)
 
     assert {:ok, %{build_number: 999_999, type_count: 1}} = Refresher.run()
-
-    File.rm!(fixture_zip)
   end
 
   test "exits :error when HEAD fails" do

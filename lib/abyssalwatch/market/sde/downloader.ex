@@ -10,6 +10,11 @@ defmodule Abyssalwatch.Market.SDE.Downloader do
   Performs a HEAD request that follows the 302 to the build-numbered URL
   and returns `{:ok, %{build_number: integer, etag: binary | nil,
   last_modified: binary | nil, url: binary}}` or `{:error, term}`.
+
+  Note: the returned `:url` is the constant `@latest_url` (the request URL),
+  not the post-redirect build-numbered URL. `Req.Response` does not expose
+  the resolved final URL as a struct field, and downstream code only needs
+  `build_number`/`etag`/`last_modified` for change detection.
   """
   def head_latest(opts \\ []) do
     req =

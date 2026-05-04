@@ -53,7 +53,7 @@ problems on Fly.io:
 
 ## Architecture
 
-```
+```text
 Application.start
   └─ Supervisor
        ├─ (existing children…)

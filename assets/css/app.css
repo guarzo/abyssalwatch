@@ -445,6 +445,108 @@
     font-weight: 500;
   }
 
+  /* Score-hero — the dominant numeric in each result row. Large tabular
+     numerals with tier-based color. Pair with .score-hero-bar (a 60px
+     micro-bar) for distribution context. */
+  .score-hero {
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum" 1;
+    font-size: 18px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-weight: 500;
+    color: var(--ink-1);
+    display: inline-block;
+    min-width: 2.4ch;
+    text-align: right;
+  }
+  .score-hero.is-s { color: oklch(0.82 0.18 145); text-shadow: 0 0 12px oklch(0.82 0.18 145 / 0.35); }
+  .score-hero.is-a { color: var(--accent-strong); }
+  .score-hero.is-b { color: var(--ink-1); }
+  .score-hero.is-c { color: var(--ink-3); }
+
+  .score-hero-bar {
+    display: inline-block;
+    width: 48px;
+    height: 4px;
+    background: var(--surface-3);
+    border-radius: 2px;
+    overflow: hidden;
+    vertical-align: middle;
+  }
+  .score-hero-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+  .score-hero-bar.is-s > span { background: oklch(0.82 0.18 145); }
+  .score-hero-bar.is-a > span { background: var(--accent-strong); }
+  .score-hero-bar.is-c > span { background: var(--ink-3); }
+
+  /* Watch-chip: criteria preview chip used on watchlist cards.
+     Composes a small monospaced key/value pair: "≤ 500,000,000 ISK". */
+  .watch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--rule-1);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-feature-settings: "tnum" 1;
+    color: var(--ink-2);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .watch-chip-key { color: var(--ink-3); }
+  .watch-chip-val { color: var(--ink-1); font-weight: 500; }
+  .watch-chip-unit { color: var(--ink-4); font-size: 9px; letter-spacing: 0.05em; }
+
+  /* Watch-template: clickable template row in the watchlist empty state. */
+  .watch-template {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--rule-1);
+    border-radius: var(--radius-md);
+    text-align: left;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+  }
+  .watch-template:hover {
+    border-color: var(--rule-2);
+    background: var(--surface-3);
+  }
+  .watch-template:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Staggered fade-in for teaching empty states. Applied to direct
+     children of [data-stagger]. Disabled by prefers-reduced-motion via
+     the global root override. */
+  [data-stagger] > * {
+    opacity: 0;
+    transform: translateY(4px);
+    animation: stagger-rise var(--motion-duration-base) var(--motion-ease) forwards;
+  }
+  [data-stagger] > *:nth-child(1) { animation-delay: 40ms; }
+  [data-stagger] > *:nth-child(2) { animation-delay: 110ms; }
+  [data-stagger] > *:nth-child(3) { animation-delay: 180ms; }
+  [data-stagger] > *:nth-child(4) { animation-delay: 250ms; }
+  [data-stagger] > *:nth-child(5) { animation-delay: 320ms; }
+  @keyframes stagger-rise {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+
   /* Comfortable rows for less-data lists. No zebra. */
   table.comfortable tbody td { height: 48px; padding: 12px 16px; background: var(--surface-1); }
   table.comfortable tbody tr:hover td { background: var(--surface-2); }

@@ -1225,17 +1225,26 @@ defmodule AbyssalwatchWeb.OptimizationLive do
   attr :optimization_error, :any, required: true
 
   defp runbar(assigns) do
+    disabled_reason =
+      cond do
+        is_nil(assigns.fitting) -> "Load a fitting first"
+        Enum.empty?(assigns.included_type_ids) -> "Select at least one module type"
+        true -> nil
+      end
+
+    assigns = assign(assigns, :disabled_reason, disabled_reason)
+
     ~H"""
     <div class="panel">
-      <div class="px-5 py-3 flex items-center gap-3 flex-wrap">
+      <div class="px-5 py-4 flex items-center gap-3 flex-wrap">
         <%= if @optimizing do %>
-          <button type="button" class="btn btn-sm btn-danger" phx-click="cancel_optimize">
+          <button type="button" class="btn btn-danger" phx-click="cancel_optimize">
             Cancel
           </button>
-          <span class="text-[12px] text-ink-3 animate-skeleton-pulse">
+          <span class="text-[13px] text-ink-2 animate-skeleton-pulse">
             {if @loading_modules,
-              do: "Loading candidates",
-              else: "Optimizing"}
+              do: "Loading candidates from Mutamarket…",
+              else: "Searching combinations…"}
           </span>
           <span class="text-[12px] text-ink-3">·</span>
           <span class="text-[12px] text-ink-2 capitalize">{@solver_mode}</span>
@@ -1244,21 +1253,35 @@ defmodule AbyssalwatchWeb.OptimizationLive do
         <% else %>
           <button
             type="button"
-            class="btn btn-primary"
+            class="btn btn-primary text-[15px] px-6 py-2.5 shadow-sm font-semibold"
             phx-click="optimize"
-            disabled={is_nil(@fitting) or Enum.empty?(@included_type_ids)}
+            disabled={@disabled_reason != nil}
+            title={@disabled_reason}
           >
-            Optimize
+            <.icon name="hero-bolt" class="size-4 mr-1.5 -ml-0.5" /> Find best fitting
           </button>
-          <span class="text-[12px] text-ink-3">·</span>
-          <span class="text-[12px] text-ink-2 capitalize">{@solver_mode}</span>
-          <span class="text-[12px] text-ink-3">·</span>
-          <span class="text-[12px] text-ink-3 tnum">
-            {length(@included_type_ids)} {pluralize(length(@included_type_ids), "type", "types")}
-          </span>
-          <span class="hidden md:inline text-[12px] text-ink-3 md:ml-auto whitespace-nowrap">
-            Ctrl-Enter to run
-          </span>
+          <%= if @disabled_reason do %>
+            <span class="text-[12px] text-ink-3 italic">
+              {@disabled_reason}
+            </span>
+          <% else %>
+            <span class="text-[12px] text-ink-3">·</span>
+            <span class="text-[12px] text-ink-2 capitalize">{@solver_mode}</span>
+            <span class="text-[12px] text-ink-3">·</span>
+            <span class="text-[12px] text-ink-3 tnum">
+              {length(@included_type_ids)} {pluralize(length(@included_type_ids), "type", "types")}
+            </span>
+            <span class="hidden md:inline text-[12px] text-ink-3 md:ml-auto whitespace-nowrap">
+              <kbd class="px-1.5 py-0.5 text-[10px] bg-surface-3 border border-rule-1 rounded">
+                Ctrl
+              </kbd>
+              +
+              <kbd class="px-1.5 py-0.5 text-[10px] bg-surface-3 border border-rule-1 rounded">
+                Enter
+              </kbd>
+              to run
+            </span>
+          <% end %>
         <% end %>
       </div>
 
@@ -1304,25 +1327,11 @@ defmodule AbyssalwatchWeb.OptimizationLive do
     ~H"""
     <%= cond do %>
       <% is_nil(@fitting) -> %>
-        <div class="panel">
-          <div class="px-6 py-12 text-center">
-            <p class="text-ink-1 text-[15px]">Load a fitting to begin.</p>
-            <p class="text-ink-3 text-[13px] mt-1">
-              Paste an EFT above. The optimizer will fill the abyssal slots.
-            </p>
-          </div>
-        </div>
+        <.empty_no_fitting />
       <% Enum.empty?(@solutions) and @optimizing -> %>
         <.solutions_skeleton />
       <% Enum.empty?(@solutions) -> %>
-        <div class="panel">
-          <div class="px-6 py-12 text-center">
-            <p class="text-ink-1 text-[15px]">No run yet.</p>
-            <p class="text-ink-3 text-[13px] mt-1">
-              Press Optimize, or Ctrl-Enter, to fill the slots.
-            </p>
-          </div>
-        </div>
+        <.empty_ready_to_run />
       <% true -> %>
         <div class={["space-y-4", @optimizing && "opacity-50"]} aria-busy={@optimizing}>
           <.solutions_table
@@ -1369,6 +1378,113 @@ defmodule AbyssalwatchWeb.OptimizationLive do
           <% end %>
         </tbody>
       </table>
+    </div>
+    """
+  end
+
+  # Empty state shown before any fitting is loaded — teaches what the
+  # optimizer does and previews the result shape.
+  defp empty_no_fitting(assigns) do
+    ~H"""
+    <div class="panel relative overflow-hidden">
+      <div class="px-6 py-10 sm:px-10 sm:py-12">
+        <div class="max-w-2xl">
+          <h3 class="text-ink-1 text-[20px] font-medium leading-tight">
+            How it works
+          </h3>
+          <p class="text-ink-3 text-[13px] mt-2 leading-relaxed">
+            Paste an EFT fit above with abyssal-mutated module slots marked.
+            We pull live Mutamarket listings for each slot, score every roll
+            with <span class="text-ink-2 font-mono text-[12px]">TOPSIS</span>
+            (a multi-criteria decision algorithm balancing your price,
+            performance, efficiency, and availability weights), then solve for
+            the combination that maxes total score under your CPU / Power /
+            Calibration / budget constraints.
+          </p>
+
+          <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3" data-stagger>
+            <.how_step n="1" title="Paste fit" body="EFT export with empty abyssal slots" />
+            <.how_step n="2" title="Tune weights" body="Price vs performance, set caps" />
+            <.how_step n="3" title="Find best" body="Top-ranked combos in seconds" />
+          </div>
+        </div>
+      </div>
+      
+    <!-- Ghost preview of result table -->
+      <div class="border-t border-rule-1 bg-surface-1/40 relative">
+        <div class="absolute top-2 right-3 pointer-events-none z-10">
+          <span class="text-[10px] uppercase tracking-[0.2em] text-ink-4 bg-surface-2 px-2 py-0.5 rounded border border-rule-1">
+            Sample output
+          </span>
+        </div>
+        <table class="dense opacity-30 select-none">
+          <thead>
+            <tr>
+              <th class="w-6"></th>
+              <th class="w-12">#</th>
+              <th class="text-right">Score</th>
+              <th class="text-right">Cost (ISK)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-center text-ink-3 text-[11px]">●</td>
+              <td class="text-ink-2 tnum">1</td>
+              <td class="text-right tnum text-ink-1">0.94</td>
+              <td class="text-right tnum">487,200,000</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td class="text-ink-2 tnum">2</td>
+              <td class="text-right tnum text-ink-1">0.89</td>
+              <td class="text-right tnum">412,500,000</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td class="text-ink-2 tnum">3</td>
+              <td class="text-right tnum text-ink-1">0.85</td>
+              <td class="text-right tnum">389,100,000</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    """
+  end
+
+  attr :n, :string, required: true
+  attr :title, :string, required: true
+  attr :body, :string, required: true
+
+  defp how_step(assigns) do
+    ~H"""
+    <div class="flex items-start gap-3">
+      <span class="shrink-0 size-6 rounded-full bg-surface-3 text-ink-2 text-[12px] tnum flex items-center justify-center font-medium">
+        {@n}
+      </span>
+      <div class="min-w-0">
+        <p class="text-ink-1 text-[13px] font-medium">{@title}</p>
+        <p class="text-ink-3 text-[12px] leading-snug">{@body}</p>
+      </div>
+    </div>
+    """
+  end
+
+  # Empty state shown when a fit is loaded but the user hasn't run yet.
+  defp empty_ready_to_run(assigns) do
+    ~H"""
+    <div class="panel">
+      <div class="px-6 py-12 sm:py-16 text-center">
+        <div class="inline-flex items-center justify-center size-12 rounded-full bg-surface-3 mb-4">
+          <.icon name="hero-bolt" class="size-6 text-ink-2" />
+        </div>
+        <p class="text-ink-1 text-[16px] font-medium">Ready to optimize.</p>
+        <p class="text-ink-3 text-[13px] mt-1.5 max-w-sm mx-auto leading-relaxed">
+          Adjust constraints and weights in the Tune sidebar, then press
+          <span class="text-ink-2 font-medium">Find best fitting</span>
+          (or <span class="font-mono text-[12px] text-ink-2">Ctrl-Enter</span>).
+        </p>
+      </div>
     </div>
     """
   end

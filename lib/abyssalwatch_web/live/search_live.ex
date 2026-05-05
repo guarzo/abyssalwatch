@@ -737,6 +737,31 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp format_score(_), do: "—"
 
+  # Score tier class for hero numeral and micro-bar coloring.
+  # S: 0.90+ green-glow ; A: 0.80–0.89 accent-strong ; B: 0.65–0.79 ink-1 ; C: < 0.65 ink-3
+  defp score_tier_class(score) when is_number(score) do
+    cond do
+      score >= 0.90 -> "is-s"
+      score >= 0.80 -> "is-a"
+      score >= 0.65 -> "is-b"
+      true -> "is-c"
+    end
+  end
+
+  defp score_tier_class(_), do: "is-c"
+
+  # Text-only tier coloring for the drawer hero numeral.
+  defp score_tier_text_class(score) when is_number(score) do
+    cond do
+      score >= 0.90 -> "text-[oklch(0.82_0.18_145)]"
+      score >= 0.80 -> "text-accent-strong"
+      score >= 0.65 -> "text-ink-1"
+      true -> "text-ink-3"
+    end
+  end
+
+  defp score_tier_text_class(_), do: "text-ink-3"
+
   defp watch_url(module_type, filters) do
     base = [{"new", "1"}, {"type_id", to_string(module_type.eve_type_id)}]
 
@@ -1533,8 +1558,8 @@ defmodule AbyssalwatchWeb.SearchLive do
         </div>
       </td>
       <td class={["text-right", (@score || 0) >= 0.85 && "is-strong"]}>
-        <div class="inline-flex items-center justify-end gap-2">
-          <span class="tnum text-ink-1">
+        <div class="inline-flex items-center justify-end gap-2.5">
+          <span class={["score-hero", score_tier_class(@score)]}>
             {format_score(@score)}
           </span>
           <%= if Enum.any?(@radar_values) do %>
@@ -1547,11 +1572,8 @@ defmodule AbyssalwatchWeb.SearchLive do
               <polygon points={@radar_polygon} class="score-radar-shape" />
             </svg>
           <% else %>
-            <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
-              <span
-                class="block h-full bg-accent"
-                style={"width: #{round((@score || 0) * 100)}%"}
-              />
+            <span class={["score-hero-bar", score_tier_class(@score)]}>
+              <span style={"width: #{round((@score || 0) * 100)}%"} />
             </span>
           <% end %>
         </div>
@@ -1623,11 +1645,17 @@ defmodule AbyssalwatchWeb.SearchLive do
       <div class="px-5 py-4 grid grid-cols-2 gap-4 border-b border-rule-1">
         <div>
           <p class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">Score</p>
-          <p class="mt-1 text-[24px] font-semibold text-ink-1 tnum leading-none">
+          <p class={[
+            "mt-1 text-[28px] font-semibold tnum leading-none",
+            score_tier_text_class(@score)
+          ]}>
             {format_score(@score)}
           </p>
-          <span class="block mt-2 h-1 w-full bg-surface-3 rounded-sm overflow-hidden">
-            <span class="block h-full bg-accent" style={"width: #{round((@score || 0) * 100)}%"} />
+          <span
+            class={["block mt-2 score-hero-bar w-full", score_tier_class(@score)]}
+            style="width: 100%; height: 4px;"
+          >
+            <span style={"width: #{round((@score || 0) * 100)}%"} />
           </span>
         </div>
         <div>

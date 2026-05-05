@@ -545,6 +545,14 @@
   @keyframes stagger-rise {
     to { opacity: 1; transform: translateY(0); }
   }
+  @media (prefers-reduced-motion: reduce) {
+    [data-stagger] > * {
+      opacity: 1;
+      transform: none;
+      animation: none;
+      animation-delay: 0ms;
+    }
+  }
 
 
   /* Comfortable rows for less-data lists. No zebra. */

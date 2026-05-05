@@ -967,7 +967,7 @@ defmodule AbyssalwatchWeb.WatchLive do
                 </h3>
                 <p class="mt-2 text-ink-3 text-[13px] leading-relaxed">
                   A watchlist pings your Discord every time a fresh abyssal module shows up
-                  matching your filters — score floor, max price, attribute mins / maxs.
+                  matching your filters — score floor, max price, attribute mins / maxes.
                   No more refreshing Mutamarket every hour.
                 </p>
 
@@ -1331,7 +1331,7 @@ defmodule AbyssalwatchWeb.WatchLive do
           <span :if={@unimportant_count > 0} class="watch-chip" title="Attribute ceilings">
             <.icon name="hero-arrow-trending-down" class="size-3" />
             <span class="watch-chip-val">{@unimportant_count}</span>
-            <span class="watch-chip-unit">{pluralize(@unimportant_count, "max", "maxs")}</span>
+            <span class="watch-chip-unit">{pluralize(@unimportant_count, "max", "maxes")}</span>
           </span>
         </div>
       </div>

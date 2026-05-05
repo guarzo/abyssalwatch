@@ -8,6 +8,15 @@ defmodule AbyssalwatchWeb.SearchLive do
   alias Abyssalwatch.Market.Mutamarket.Client, as: MutamarketClient
   alias Abyssalwatch.Preferences.Store, as: Preferences
 
+  # Threshold above which a score qualifies as "S-tier" — the standout
+  # band partitioned out by the section divider, flagged with .is-strong
+  # in the table cell, and rendered with the green-glow .is-s class in
+  # the score-hero numeral. Single source of truth: changing this moves
+  # all three signals together.
+  @s_tier_threshold 0.85
+  @a_tier_threshold 0.75
+  @b_tier_threshold 0.60
+
   @impl true
   def mount(_params, session, socket) do
     module_types = load_module_types()
@@ -738,12 +747,15 @@ defmodule AbyssalwatchWeb.SearchLive do
   defp format_score(_), do: "—"
 
   # Score tier class for hero numeral and micro-bar coloring.
-  # S: 0.90+ green-glow ; A: 0.80–0.89 accent-strong ; B: 0.65–0.79 ink-1 ; C: < 0.65 ink-3
+  # S: >= @s_tier_threshold green-glow
+  # A: >= @a_tier_threshold accent-strong
+  # B: >= @b_tier_threshold ink-1
+  # C: below ink-3
   defp score_tier_class(score) when is_number(score) do
     cond do
-      score >= 0.90 -> "is-s"
-      score >= 0.80 -> "is-a"
-      score >= 0.65 -> "is-b"
+      score >= @s_tier_threshold -> "is-s"
+      score >= @a_tier_threshold -> "is-a"
+      score >= @b_tier_threshold -> "is-b"
       true -> "is-c"
     end
   end
@@ -753,9 +765,9 @@ defmodule AbyssalwatchWeb.SearchLive do
   # Text-only tier coloring for the drawer hero numeral.
   defp score_tier_text_class(score) when is_number(score) do
     cond do
-      score >= 0.90 -> "text-[oklch(0.82_0.18_145)]"
-      score >= 0.80 -> "text-accent-strong"
-      score >= 0.65 -> "text-ink-1"
+      score >= @s_tier_threshold -> "text-[oklch(0.82_0.18_145)]"
+      score >= @a_tier_threshold -> "text-accent-strong"
+      score >= @b_tier_threshold -> "text-ink-1"
       true -> "text-ink-3"
     end
   end
@@ -1447,7 +1459,7 @@ defmodule AbyssalwatchWeb.SearchLive do
           </tr>
         </thead>
         <tbody>
-          <%!-- S-tier section: rows scoring >= 0.85, set apart with a mono label divider. --%>
+          <%!-- S-tier section: rows scoring >= @s_tier_threshold, set apart with a mono label divider. --%>
           <%= if Enum.any?(@s_tier_modules) do %>
             <tr class="s-tier-divider" aria-hidden="true">
               <td colspan="5">
@@ -1557,7 +1569,7 @@ defmodule AbyssalwatchWeb.SearchLive do
           {@module[:type_name] || @module[:source_type_name] || @module.type_name}
         </div>
       </td>
-      <td class={["text-right", (@score || 0) >= 0.85 && "is-strong"]}>
+      <td class={["text-right", (@score || 0) >= @s_tier_threshold && "is-strong"]}>
         <div class="inline-flex items-center justify-end gap-2.5">
           <span class={["score-hero", score_tier_class(@score)]}>
             {format_score(@score)}
@@ -1885,10 +1897,11 @@ defmodule AbyssalwatchWeb.SearchLive do
   end
 
   # Partition results into "standout" S-tier and the rest. The naive
-  # threshold (score >= 0.85) over-fires when the upstream feed is
-  # uniformly high-scoring (every roll an S-tier removes the signal),
-  # so we cap S-tier at 10% of the result set or 25 rows, whichever is
-  # smaller. Below 8 results, no partition — the divider would be noise.
+  # threshold (score >= @s_tier_threshold) over-fires when the upstream
+  # feed is uniformly high-scoring (every roll an S-tier removes the
+  # signal), so we cap S-tier at 10% of the result set or 25 rows,
+  # whichever is smaller. Below 8 results, no partition — the divider
+  # would be noise.
   defp partition_s_tier(modules) when length(modules) < 8, do: {[], modules}
 
   defp partition_s_tier(modules) do
@@ -1902,7 +1915,7 @@ defmodule AbyssalwatchWeb.SearchLive do
 
       candidates ->
         # Only call them S-tier if they actually clear the absolute bar.
-        s_tier = Enum.filter(candidates, fn %{score: s} -> (s || 0) >= 0.85 end)
+        s_tier = Enum.filter(candidates, fn %{score: s} -> (s || 0) >= @s_tier_threshold end)
 
         if Enum.empty?(s_tier) do
           {[], modules}

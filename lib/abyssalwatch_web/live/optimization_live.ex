@@ -280,13 +280,20 @@ defmodule AbyssalwatchWeb.OptimizationLive do
       key == "Escape" and socket.assigns.confirming_clear ->
         {:noreply, assign(socket, :confirming_clear, false)}
 
-      key == "Enter" and (ctrl or meta) and socket.assigns.fitting and
-          not socket.assigns.optimizing ->
+      # Mirror the disabled_reason gates on the runbar's primary CTA so
+      # the keyboard shortcut and the button are interchangeable.
+      key == "Enter" and (ctrl or meta) and ready_to_optimize?(socket.assigns) ->
         handle_event("optimize", %{}, socket)
 
       true ->
         {:noreply, socket}
     end
+  end
+
+  defp ready_to_optimize?(assigns) do
+    not is_nil(assigns.fitting) and
+      not Enum.empty?(assigns.included_type_ids) and
+      not assigns.optimizing
   end
 
   @impl true

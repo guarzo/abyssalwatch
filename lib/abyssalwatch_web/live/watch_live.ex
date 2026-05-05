@@ -959,19 +959,124 @@ defmodule AbyssalwatchWeb.WatchLive do
         </header>
 
         <%= if Enum.empty?(@watchlists) do %>
-          <div class="panel max-w-2xl mx-auto">
-            <div class="px-8 py-12 text-center">
-              <p class="text-ink-1 text-[15px]">No watchlists yet.</p>
-              <p class="mt-1.5 text-ink-3 text-[13px] leading-relaxed">
-                Save a search you want notified about, or start fresh.
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div class="panel">
+              <div class="px-6 py-8">
+                <h3 class="text-ink-1 text-[16px] font-semibold">
+                  Save a search and we'll watch it for you.
+                </h3>
+                <p class="mt-2 text-ink-3 text-[13px] leading-relaxed">
+                  A watchlist pings your Discord every time a fresh abyssal module shows up
+                  matching your filters — score floor, max price, attribute mins / maxes.
+                  No more refreshing Mutamarket every hour.
+                </p>
+
+                <div class="mt-5 grid gap-2.5" data-stagger>
+                  <p class="text-[10px] uppercase tracking-wider text-ink-4 font-semibold">
+                    Quick templates
+                  </p>
+                  <button
+                    type="button"
+                    phx-click="new"
+                    class="watch-template"
+                  >
+                    <.icon name="hero-bolt" class="size-4 text-accent shrink-0 mt-0.5" />
+                    <div class="text-left">
+                      <p class="text-[13px] text-ink-1 font-medium">
+                        Top 10/10 invul rolls under 500M
+                      </p>
+                      <p class="text-[11px] text-ink-4 mt-0.5">
+                        High score floor, hard price ceiling
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="new"
+                    class="watch-template"
+                  >
+                    <.icon name="hero-currency-dollar" class="size-4 text-signal shrink-0 mt-0.5" />
+                    <div class="text-left">
+                      <p class="text-[13px] text-ink-1 font-medium">
+                        Damage Control deals — score 0.7+
+                      </p>
+                      <p class="text-[11px] text-ink-4 mt-0.5">Catch underpriced rolls fast</p>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="new"
+                    class="watch-template"
+                  >
+                    <.icon name="hero-cog-6-tooth" class="size-4 text-ink-2 shrink-0 mt-0.5" />
+                    <div class="text-left">
+                      <p class="text-[13px] text-ink-1 font-medium">Custom watchlist</p>
+                      <p class="text-[11px] text-ink-4 mt-0.5">
+                        Pick a module type, set your own thresholds
+                      </p>
+                    </div>
+                  </button>
+                </div>
+
+                <div class="mt-6 flex items-center gap-3">
+                  <button type="button" class="btn btn-primary" phx-click="new">
+                    <.icon name="hero-plus" class="size-4" /> Create watchlist
+                  </button>
+                  <.link navigate={~p"/search"} class="btn btn-ghost">
+                    Browse search first <.icon name="hero-arrow-right" class="size-4" />
+                  </.link>
+                </div>
+              </div>
+            </div>
+
+            <%!-- Sample preview card on desktop only --%>
+            <div class="hidden lg:block">
+              <p class="text-[10px] uppercase tracking-wider text-ink-4 font-semibold mb-2">
+                Sample
               </p>
-              <div class="mt-6 flex items-center justify-center gap-3">
-                <button type="button" class="btn btn-primary" phx-click="new">
-                  Create your first watchlist
-                </button>
-                <.link navigate={~p"/search"} class="btn btn-ghost">
-                  Browse search <.icon name="hero-arrow-right" class="size-4" />
-                </.link>
+              <div class="panel pointer-events-none select-none opacity-80">
+                <div class="px-4 py-3 border-b border-rule-1">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                      <h3 class="text-[14px] font-semibold text-ink-1 truncate">
+                        Cheap 10/10 Invul
+                      </h3>
+                      <p class="text-[11px] text-ink-4 truncate mt-0.5">
+                        Abyssal Adaptive Invulnerability Field II
+                      </p>
+                    </div>
+                    <span class="pill pill-ready">
+                      <span class="pill-glyph" aria-hidden="true">●</span>
+                      <span>live</span>
+                    </span>
+                  </div>
+                  <div class="mt-2.5 flex flex-wrap gap-1.5">
+                    <span class="watch-chip">
+                      <span class="watch-chip-key">≤</span>
+                      <span class="watch-chip-val tnum">500,000,000</span>
+                      <span class="watch-chip-unit">ISK</span>
+                    </span>
+                    <span class="watch-chip">
+                      <span class="watch-chip-key">score ≥</span>
+                      <span class="watch-chip-val tnum">0.85</span>
+                    </span>
+                  </div>
+                </div>
+                <div class="px-4 py-3 flex items-baseline gap-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[10px] uppercase tracking-wider text-ink-4 font-semibold leading-none">
+                      Total matches
+                    </p>
+                    <p class="mt-1 text-[22px] tnum leading-none font-mono text-ink-1">7</p>
+                  </div>
+                  <div class="text-right text-[11px] text-ink-3 leading-snug">
+                    <p>Checked <span class="tnum">2m ago</span></p>
+                    <p class="text-ink-4 mt-0.5">
+                      <.icon name="hero-bell-alert" class="size-3 inline -mt-0.5" />
+                      <span class="ml-0.5">Discord</span>
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1169,35 +1274,96 @@ defmodule AbyssalwatchWeb.WatchLive do
   attr :confirming, :boolean, required: true
 
   defp watchlist_card(assigns) do
+    important_count = map_size(assigns.watchlist.important_attributes || %{})
+    unimportant_count = map_size(assigns.watchlist.unimportant_attributes || %{})
+    has_price = not is_nil(assigns.watchlist.price_threshold)
+    has_score = not is_nil(assigns.watchlist.min_score)
+    is_paused = not assigns.watchlist.notifications_enabled
+
+    assigns =
+      assigns
+      |> assign(:important_count, important_count)
+      |> assign(:unimportant_count, unimportant_count)
+      |> assign(:has_price, has_price)
+      |> assign(:has_score, has_score)
+      |> assign(:is_paused, is_paused)
+
     ~H"""
-    <div class="panel">
+    <div class={["panel", @is_paused && "opacity-75"]}>
       <div class="px-4 py-3 border-b border-rule-1">
         <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
+          <div class="min-w-0 flex-1">
             <h3 class="text-[14px] font-semibold text-ink-1 truncate">{@watchlist.name}</h3>
             <p class="text-[11px] text-ink-4 truncate mt-0.5">{@watchlist.module_type_name}</p>
           </div>
           <%= if @watchlist.notifications_enabled do %>
-            <span class="pill pill-ready">
+            <span class="pill pill-ready" title="Notifications active">
               <span class="pill-glyph" aria-hidden="true">●</span>
               <span>live</span>
             </span>
           <% else %>
-            <span class="pill pill-idle">
+            <span class="pill pill-idle" title="Notifications paused">
               <span class="pill-glyph" aria-hidden="true">○</span>
               <span>paused</span>
             </span>
           <% end %>
         </div>
-        <p class="mt-2 text-[11px] text-ink-3 tnum">
-          <span class="text-ink-2">{@watchlist.match_count || 0}</span>
-          matches
-          <%= if @watchlist.last_checked_at do %>
-            <span class="text-ink-4">·</span> checked {time_ago(@watchlist.last_checked_at)}
-          <% end %>
-        </p>
+
+        <%!-- Criteria chips: what this watchlist is actually watching for --%>
+        <div
+          :if={@has_price or @has_score or @important_count > 0 or @unimportant_count > 0}
+          class="mt-2.5 flex flex-wrap gap-1.5"
+        >
+          <span :if={@has_price} class="watch-chip">
+            <span class="watch-chip-key">≤</span>
+            <span class="watch-chip-val tnum">{format_price_plain(@watchlist.price_threshold)}</span>
+            <span class="watch-chip-unit">ISK</span>
+          </span>
+          <span :if={@has_score} class="watch-chip">
+            <span class="watch-chip-key">score ≥</span>
+            <span class="watch-chip-val tnum">{format_score(@watchlist.min_score)}</span>
+          </span>
+          <span :if={@important_count > 0} class="watch-chip" title="Required attribute floors">
+            <.icon name="hero-arrow-trending-up" class="size-3" />
+            <span class="watch-chip-val">{@important_count}</span>
+            <span class="watch-chip-unit">{pluralize(@important_count, "min", "mins")}</span>
+          </span>
+          <span :if={@unimportant_count > 0} class="watch-chip" title="Attribute ceilings">
+            <.icon name="hero-arrow-trending-down" class="size-3" />
+            <span class="watch-chip-val">{@unimportant_count}</span>
+            <span class="watch-chip-unit">{pluralize(@unimportant_count, "max", "maxes")}</span>
+          </span>
+        </div>
       </div>
-      <footer class="px-4 py-2 flex items-center gap-2 flex-wrap">
+
+      <%!-- Stats row: match count is the hero number --%>
+      <div class="px-4 py-3 flex items-baseline gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase tracking-wider text-ink-4 font-semibold leading-none">
+            Total matches
+          </p>
+          <p class={[
+            "mt-1 text-[22px] tnum leading-none font-mono",
+            (@watchlist.match_count || 0) > 0 && "text-ink-1",
+            (@watchlist.match_count || 0) == 0 && "text-ink-3"
+          ]}>
+            {@watchlist.match_count || 0}
+          </p>
+        </div>
+        <div class="text-right text-[11px] text-ink-3 leading-snug">
+          <%= if @watchlist.last_checked_at do %>
+            <p>Checked <span class="tnum">{time_ago(@watchlist.last_checked_at)}</span></p>
+          <% else %>
+            <p class="italic">Not yet checked</p>
+          <% end %>
+          <p class="text-ink-4 mt-0.5">
+            <.icon name="hero-bell-alert" class="size-3 inline -mt-0.5" />
+            <span class="ml-0.5">Discord</span>
+          </p>
+        </div>
+      </div>
+
+      <footer class="px-4 py-2 flex items-center gap-2 flex-wrap border-t border-rule-1">
         <button
           type="button"
           class="btn btn-sm"
@@ -1449,6 +1615,9 @@ defmodule AbyssalwatchWeb.WatchLive do
   end
 
   # ── Format ────────────────────────────────────────────────────────
+
+  defp pluralize(1, s, _), do: s
+  defp pluralize(_, _, p), do: p
 
   defp format_score(score) when is_number(score),
     do: :erlang.float_to_binary(score * 1.0, decimals: 2)

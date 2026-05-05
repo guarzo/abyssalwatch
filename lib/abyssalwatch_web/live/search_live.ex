@@ -8,6 +8,15 @@ defmodule AbyssalwatchWeb.SearchLive do
   alias Abyssalwatch.Market.Mutamarket.Client, as: MutamarketClient
   alias Abyssalwatch.Preferences.Store, as: Preferences
 
+  # Threshold above which a score qualifies as "S-tier" — the standout
+  # band partitioned out by the section divider, flagged with .is-strong
+  # in the table cell, and rendered with the green-glow .is-s class in
+  # the score-hero numeral. Single source of truth: changing this moves
+  # all three signals together.
+  @s_tier_threshold 0.85
+  @a_tier_threshold 0.75
+  @b_tier_threshold 0.60
+
   @impl true
   def mount(_params, session, socket) do
     module_types = load_module_types()
@@ -737,6 +746,34 @@ defmodule AbyssalwatchWeb.SearchLive do
 
   defp format_score(_), do: "—"
 
+  # Score tier class for hero numeral and micro-bar coloring.
+  # S: >= @s_tier_threshold green-glow
+  # A: >= @a_tier_threshold accent-strong
+  # B: >= @b_tier_threshold ink-1
+  # C: below ink-3
+  defp score_tier_class(score) when is_number(score) do
+    cond do
+      score >= @s_tier_threshold -> "is-s"
+      score >= @a_tier_threshold -> "is-a"
+      score >= @b_tier_threshold -> "is-b"
+      true -> "is-c"
+    end
+  end
+
+  defp score_tier_class(_), do: "is-c"
+
+  # Text-only tier coloring for the drawer hero numeral.
+  defp score_tier_text_class(score) when is_number(score) do
+    cond do
+      score >= @s_tier_threshold -> "text-[oklch(0.82_0.18_145)]"
+      score >= @a_tier_threshold -> "text-accent-strong"
+      score >= @b_tier_threshold -> "text-ink-1"
+      true -> "text-ink-3"
+    end
+  end
+
+  defp score_tier_text_class(_), do: "text-ink-3"
+
   defp watch_url(module_type, filters) do
     base = [{"new", "1"}, {"type_id", to_string(module_type.eve_type_id)}]
 
@@ -1422,7 +1459,7 @@ defmodule AbyssalwatchWeb.SearchLive do
           </tr>
         </thead>
         <tbody>
-          <%!-- S-tier section: rows scoring >= 0.85, set apart with a mono label divider. --%>
+          <%!-- S-tier section: rows scoring >= @s_tier_threshold, set apart with a mono label divider. --%>
           <%= if Enum.any?(@s_tier_modules) do %>
             <tr class="s-tier-divider" aria-hidden="true">
               <td colspan="5">
@@ -1532,9 +1569,9 @@ defmodule AbyssalwatchWeb.SearchLive do
           {@module[:type_name] || @module[:source_type_name] || @module.type_name}
         </div>
       </td>
-      <td class={["text-right", (@score || 0) >= 0.85 && "is-strong"]}>
-        <div class="inline-flex items-center justify-end gap-2">
-          <span class="tnum text-ink-1">
+      <td class={["text-right", (@score || 0) >= @s_tier_threshold && "is-strong"]}>
+        <div class="inline-flex items-center justify-end gap-2.5">
+          <span class={["score-hero", score_tier_class(@score)]}>
             {format_score(@score)}
           </span>
           <%= if Enum.any?(@radar_values) do %>
@@ -1547,11 +1584,8 @@ defmodule AbyssalwatchWeb.SearchLive do
               <polygon points={@radar_polygon} class="score-radar-shape" />
             </svg>
           <% else %>
-            <span class="block w-12 h-1 bg-surface-3 rounded-sm overflow-hidden">
-              <span
-                class="block h-full bg-accent"
-                style={"width: #{round((@score || 0) * 100)}%"}
-              />
+            <span class={["score-hero-bar", score_tier_class(@score)]}>
+              <span style={"width: #{round((@score || 0) * 100)}%"} />
             </span>
           <% end %>
         </div>
@@ -1623,11 +1657,17 @@ defmodule AbyssalwatchWeb.SearchLive do
       <div class="px-5 py-4 grid grid-cols-2 gap-4 border-b border-rule-1">
         <div>
           <p class="text-[11px] uppercase tracking-wider text-ink-3 font-medium">Score</p>
-          <p class="mt-1 text-[24px] font-semibold text-ink-1 tnum leading-none">
+          <p class={[
+            "mt-1 text-[28px] font-semibold tnum leading-none",
+            score_tier_text_class(@score)
+          ]}>
             {format_score(@score)}
           </p>
-          <span class="block mt-2 h-1 w-full bg-surface-3 rounded-sm overflow-hidden">
-            <span class="block h-full bg-accent" style={"width: #{round((@score || 0) * 100)}%"} />
+          <span
+            class={["block mt-2 score-hero-bar w-full", score_tier_class(@score)]}
+            style="width: 100%; height: 4px;"
+          >
+            <span style={"width: #{round((@score || 0) * 100)}%"} />
           </span>
         </div>
         <div>
@@ -1857,10 +1897,11 @@ defmodule AbyssalwatchWeb.SearchLive do
   end
 
   # Partition results into "standout" S-tier and the rest. The naive
-  # threshold (score >= 0.85) over-fires when the upstream feed is
-  # uniformly high-scoring (every roll an S-tier removes the signal),
-  # so we cap S-tier at 10% of the result set or 25 rows, whichever is
-  # smaller. Below 8 results, no partition — the divider would be noise.
+  # threshold (score >= @s_tier_threshold) over-fires when the upstream
+  # feed is uniformly high-scoring (every roll an S-tier removes the
+  # signal), so we cap S-tier at 10% of the result set or 25 rows,
+  # whichever is smaller. Below 8 results, no partition — the divider
+  # would be noise.
   defp partition_s_tier(modules) when length(modules) < 8, do: {[], modules}
 
   defp partition_s_tier(modules) do
@@ -1874,7 +1915,7 @@ defmodule AbyssalwatchWeb.SearchLive do
 
       candidates ->
         # Only call them S-tier if they actually clear the absolute bar.
-        s_tier = Enum.filter(candidates, fn %{score: s} -> (s || 0) >= 0.85 end)
+        s_tier = Enum.filter(candidates, fn %{score: s} -> (s || 0) >= @s_tier_threshold end)
 
         if Enum.empty?(s_tier) do
           {[], modules}
